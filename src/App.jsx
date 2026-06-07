@@ -1,74 +1,74 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, ArrowRight, ArrowUpRight, Play, Award, Calendar, BarChart2, ShieldAlert, LogOut, CheckCircle, User, Zap, Mail } from "lucide-react";
+import { ArrowLeft, ArrowRight, ArrowUpRight, Play, Award, ShieldAlert, LogOut, CheckCircle, User, Zap, Mail, Target } from "lucide-react";
 
 // ─── FIFA WC 2026 GROUP STAGE FIXTURES ────────────────────────────────────────
 const FIXTURES = [
-  { id: 1,  group:"A", home:"Mexico",      away:"Ecuador",     date:"2026-06-11T20:00:00-05:00", venue:"SoFi Stadium, Los Angeles" },
-  { id: 2,  group:"A", home:"USA",         away:"Bolivia",     date:"2026-06-12T17:00:00-05:00", venue:"MetLife Stadium, New York" },
-  { id: 3,  group:"A", home:"Ecuador",     away:"Bolivia",     date:"2026-06-16T14:00:00-05:00", venue:"Levi's Stadium, San Francisco" },
-  { id: 4,  group:"A", home:"USA",         away:"Mexico",      date:"2026-06-16T20:00:00-05:00", venue:"AT&T Stadium, Dallas" },
-  { id: 5,  group:"A", home:"Bolivia",     away:"USA",         date:"2026-06-20T20:00:00-05:00", venue:"Rose Bowl, Los Angeles" },
-  { id: 6,  group:"A", home:"Ecuador",     away:"Mexico",      date:"2026-06-20T20:00:00-05:00", venue:"Arrowhead Stadium, Kansas City" },
-  { id: 7,  group:"B", home:"Argentina",   away:"Morocco",     date:"2026-06-13T17:00:00-05:00", venue:"MetLife Stadium, New York" },
-  { id: 8,  group:"B", home:"Ukraine",     away:"Iraq",        date:"2026-06-13T20:00:00-05:00", venue:"AT&T Stadium, Dallas" },
-  { id: 9,  group:"B", home:"Morocco",     away:"Iraq",        date:"2026-06-17T14:00:00-05:00", venue:"Arrowhead Stadium, Kansas City" },
-  { id: 10, group:"B", home:"Argentina",   away:"Ukraine",     date:"2026-06-17T20:00:00-05:00", venue:"Rose Bowl, Los Angeles" },
-  { id: 11, group:"B", home:"Iraq",        away:"Argentina",   date:"2026-06-21T16:00:00-05:00", venue:"SoFi Stadium, Los Angeles" },
-  { id: 12, group:"B", home:"Ukraine",     away:"Morocco",     date:"2026-06-21T16:00:00-05:00", venue:"Levi's Stadium, San Francisco" },
-  { id: 13, group:"C", home:"France",      away:"Saudi Arabia",date:"2026-06-13T14:00:00-05:00", venue:"BC Place, Vancouver" },
-  { id: 14, group:"C", home:"Japan",       away:"New Zealand", date:"2026-06-14T17:00:00-05:00", venue:"Estadio Akron, Guadalajara" },
-  { id: 15, group:"C", home:"Saudi Arabia",away:"New Zealand", date:"2026-06-18T14:00:00-05:00", venue:"BC Place, Vancouver" },
-  { id: 16, group:"C", home:"France",      away:"Japan",       date:"2026-06-18T20:00:00-05:00", venue:"AT&T Stadium, Dallas" },
-  { id: 17, group:"C", home:"New Zealand", away:"France",      date:"2026-06-22T16:00:00-05:00", venue:"Estadio Akron, Guadalajara" },
-  { id: 18, group:"C", home:"Saudi Arabia",away:"Japan",       date:"2026-06-22T16:00:00-05:00", venue:"MetLife Stadium, New York" },
-  { id: 19, group:"D", home:"Spain",       away:"South Korea", date:"2026-06-14T14:00:00-05:00", venue:"Rose Bowl, Los Angeles" },
-  { id: 20, group:"D", home:"Germany",     away:"Nigeria",     date:"2026-06-14T20:00:00-05:00", venue:"AT&T Stadium, Dallas" },
-  { id: 21, group:"D", home:"South Korea", away:"Nigeria",     date:"2026-06-18T17:00:00-05:00", venue:"SoFi Stadium, Los Angeles" },
-  { id: 22, group:"D", home:"Spain",       away:"Germany",     date:"2026-06-19T20:00:00-05:00", venue:"MetLife Stadium, New York" },
-  { id: 23, group:"D", home:"Nigeria",     away:"Spain",       date:"2026-06-23T16:00:00-05:00", venue:"Arrowhead Stadium, Kansas City" },
-  { id: 24, group:"D", home:"South Korea", away:"Germany",     date:"2026-06-23T16:00:00-05:00", venue:"Levi's Stadium, San Francisco" },
-  { id: 25, group:"E", home:"Brazil",      away:"Serbia",      date:"2026-06-15T17:00:00-05:00", venue:"Estadio Azteca, Mexico City" },
-  { id: 26, group:"E", home:"England",     away:"Australia",   date:"2026-06-15T20:00:00-05:00", venue:"AT&T Stadium, Dallas" },
-  { id: 27, group:"E", home:"Serbia",      away:"Australia",   date:"2026-06-19T14:00:00-05:00", venue:"Rose Bowl, Los Angeles" },
-  { id: 28, group:"E", home:"Brazil",      away:"England",     date:"2026-06-19T17:00:00-05:00", venue:"SoFi Stadium, Los Angeles" },
-  { id: 29, group:"E", home:"Australia",   away:"Brazil",      date:"2026-06-23T20:00:00-05:00", venue:"MetLife Stadium, New York" },
-  { id: 30, group:"E", home:"England",     away:"Serbia",      date:"2026-06-23T20:00:00-05:00", venue:"BC Place, Vancouver" },
-  { id: 31, group:"F", home:"Portugal",    away:"Cameroon",    date:"2026-06-15T14:00:00-05:00", venue:"BC Place, Vancouver" },
-  { id: 32, group:"F", home:"Belgium",     away:"Venezuela",   date:"2026-06-16T17:00:00-05:00", venue:"Estadio Akron, Guadalajara" },
-  { id: 33, group:"F", home:"Cameroon",    away:"Venezuela",   date:"2026-06-20T14:00:00-05:00", venue:"Estadio Azteca, Mexico City" },
-  { id: 34, group:"F", home:"Portugal",    away:"Belgium",     date:"2026-06-20T17:00:00-05:00", venue:"Rose Bowl, Los Angeles" },
-  { id: 35, group:"F", home:"Venezuela",   away:"Portugal",    date:"2026-06-24T16:00:00-05:00", venue:"SoFi Stadium, Los Angeles" },
-  { id: 36, group:"F", home:"Cameroon",    away:"Belgium",     date:"2026-06-24T16:00:00-05:00", venue:"AT&T Stadium, Dallas" },
-  { id: 37, group:"G", home:"Netherlands", away:"Uruguay",     date:"2026-06-16T14:00:00-05:00", venue:"Estadio Azteca, Mexico City" },
-  { id: 38, group:"G", home:"Colombia",    away:"Senegal",     date:"2026-06-17T17:00:00-05:00", venue:"BC Place, Vancouver" },
-  { id: 39, group:"G", home:"Uruguay",     away:"Senegal",     date:"2026-06-21T14:00:00-05:00", venue:"Estadio Akron, Guadalajara" },
-  { id: 40, group:"G", home:"Netherlands", away:"Colombia",    date:"2026-06-21T20:00:00-05:00", venue:"MetLife Stadium, New York" },
-  { id: 41, group:"G", home:"Senegal",     away:"Netherlands", date:"2026-06-25T16:00:00-05:00", venue:"Rose Bowl, Los Angeles" },
-  { id: 42, group:"G", home:"Uruguay",     away:"Colombia",    date:"2026-06-25T16:00:00-05:00", venue:"Estadio Azteca, Mexico City" },
-  { id: 43, group:"H", home:"Italy",       away:"Ecuador",     date:"2026-06-17T14:00:00-05:00", venue:"AT&T Stadium, Dallas" },
-  { id: 44, group:"H", home:"Croatia",     away:"Iran",        date:"2026-06-17T20:00:00-05:00", venue:"SoFi Stadium, Los Angeles" },
-  { id: 45, group:"H", home:"Ecuador",     away:"Iran",        date:"2026-06-21T17:00:00-05:00", venue:"MetLife Stadium, New York" },
-  { id: 46, group:"H", home:"Italy",       away:"Croatia",     date:"2026-06-22T20:00:00-05:00", venue:"BC Place, Vancouver" },
-  { id: 47, group:"H", home:"Iran",        away:"Italy",       date:"2026-06-26T16:00:00-05:00", venue:"Estadio Akron, Guadalajara" },
-  { id: 48, group:"H", home:"Croatia",     away:"Ecuador",     date:"2026-06-26T16:00:00-05:00", venue:"Arrowhead Stadium, Kansas City" },
+  { id: 1, group: "A", home: "Mexico", away: "Ecuador", date: "2026-06-11T20:00:00-05:00", venue: "SoFi Stadium, Los Angeles" },
+  { id: 2, group: "A", home: "USA", away: "Bolivia", date: "2026-06-12T17:00:00-05:00", venue: "MetLife Stadium, New York" },
+  { id: 3, group: "A", home: "Ecuador", away: "Bolivia", date: "2026-06-16T14:00:00-05:00", venue: "Levi's Stadium, San Francisco" },
+  { id: 4, group: "A", home: "USA", away: "Mexico", date: "2026-06-16T20:00:00-05:00", venue: "AT&T Stadium, Dallas" },
+  { id: 5, group: "A", home: "Bolivia", away: "USA", date: "2026-06-20T20:00:00-05:00", venue: "Rose Bowl, Los Angeles" },
+  { id: 6, group: "A", home: "Ecuador", away: "Mexico", date: "2026-06-20T20:00:00-05:00", venue: "Arrowhead Stadium, Kansas City" },
+  { id: 7, group: "B", home: "Argentina", away: "Morocco", date: "2026-06-13T17:00:00-05:00", venue: "MetLife Stadium, New York" },
+  { id: 8, group: "B", home: "Ukraine", away: "Iraq", date: "2026-06-13T20:00:00-05:00", venue: "AT&T Stadium, Dallas" },
+  { id: 9, group: "B", home: "Morocco", away: "Iraq", date: "2026-06-17T14:00:00-05:00", venue: "Arrowhead Stadium, Kansas City" },
+  { id: 10, group: "B", home: "Argentina", away: "Ukraine", date: "2026-06-17T20:00:00-05:00", venue: "Rose Bowl, Los Angeles" },
+  { id: 11, group: "B", home: "Iraq", away: "Argentina", date: "2026-06-21T16:00:00-05:00", venue: "SoFi Stadium, Los Angeles" },
+  { id: 12, group: "B", home: "Ukraine", away: "Morocco", date: "2026-06-21T16:00:00-05:00", venue: "Levi's Stadium, San Francisco" },
+  { id: 13, group: "C", home: "France", away: "Saudi Arabia", date: "2026-06-13T14:00:00-05:00", venue: "BC Place, Vancouver" },
+  { id: 14, group: "C", home: "Japan", away: "New Zealand", date: "2026-06-14T17:00:00-05:00", venue: "Estadio Akron, Guadalajara" },
+  { id: 15, group: "C", home: "Saudi Arabia", away: "New Zealand", date: "2026-06-18T14:00:00-05:00", venue: "BC Place, Vancouver" },
+  { id: 16, group: "C", home: "France", away: "Japan", date: "2026-06-18T20:00:00-05:00", venue: "AT&T Stadium, Dallas" },
+  { id: 17, group: "C", home: "New Zealand", away: "France", date: "2026-06-22T16:00:00-05:00", venue: "Estadio Akron, Guadalajara" },
+  { id: 18, group: "C", home: "Saudi Arabia", away: "Japan", date: "2026-06-22T16:00:00-05:00", venue: "MetLife Stadium, New York" },
+  { id: 19, group: "D", home: "Spain", away: "South Korea", date: "2026-06-14T14:00:00-05:00", venue: "Rose Bowl, Los Angeles" },
+  { id: 20, group: "D", home: "Germany", away: "Nigeria", date: "2026-06-14T20:00:00-05:00", venue: "AT&T Stadium, Dallas" },
+  { id: 21, group: "D", home: "South Korea", away: "Nigeria", date: "2026-06-18T17:00:00-05:00", venue: "SoFi Stadium, Los Angeles" },
+  { id: 22, group: "D", home: "Spain", away: "Germany", date: "2026-06-19T20:00:00-05:00", venue: "MetLife Stadium, New York" },
+  { id: 23, group: "D", home: "Nigeria", away: "Spain", date: "2026-06-23T16:00:00-05:00", venue: "Arrowhead Stadium, Kansas City" },
+  { id: 24, group: "D", home: "South Korea", away: "Germany", date: "2026-06-23T16:00:00-05:00", venue: "Levi's Stadium, San Francisco" },
+  { id: 25, group: "E", home: "Brazil", away: "Serbia", date: "2026-06-15T17:00:00-05:00", venue: "Estadio Azteca, Mexico City" },
+  { id: 26, group: "E", home: "England", away: "Australia", date: "2026-06-15T20:00:00-05:00", venue: "AT&T Stadium, Dallas" },
+  { id: 27, group: "E", home: "Serbia", away: "Australia", date: "2026-06-19T14:00:00-05:00", venue: "Rose Bowl, Los Angeles" },
+  { id: 28, group: "E", home: "Brazil", away: "England", date: "2026-06-19T17:00:00-05:00", venue: "SoFi Stadium, Los Angeles" },
+  { id: 29, group: "E", home: "Australia", away: "Brazil", date: "2026-06-23T20:00:00-05:00", venue: "MetLife Stadium, New York" },
+  { id: 30, group: "E", home: "England", away: "Serbia", date: "2026-06-23T20:00:00-05:00", venue: "BC Place, Vancouver" },
+  { id: 31, group: "F", home: "Portugal", away: "Cameroon", date: "2026-06-15T14:00:00-05:00", venue: "BC Place, Vancouver" },
+  { id: 32, group: "F", home: "Belgium", away: "Venezuela", date: "2026-06-16T17:00:00-05:00", venue: "Estadio Akron, Guadalajara" },
+  { id: 33, group: "F", home: "Cameroon", away: "Venezuela", date: "2026-06-20T14:00:00-05:00", venue: "Estadio Azteca, Mexico City" },
+  { id: 34, group: "F", home: "Portugal", away: "Belgium", date: "2026-06-20T17:00:00-05:00", venue: "Rose Bowl, Los Angeles" },
+  { id: 35, group: "F", home: "Venezuela", away: "Portugal", date: "2026-06-24T16:00:00-05:00", venue: "SoFi Stadium, Los Angeles" },
+  { id: 36, group: "F", home: "Cameroon", away: "Belgium", date: "2026-06-24T16:00:00-05:00", venue: "AT&T Stadium, Dallas" },
+  { id: 37, group: "G", home: "Netherlands", away: "Uruguay", date: "2026-06-16T14:00:00-05:00", venue: "Estadio Azteca, Mexico City" },
+  { id: 38, group: "G", home: "Colombia", away: "Senegal", date: "2026-06-17T17:00:00-05:00", venue: "BC Place, Vancouver" },
+  { id: 39, group: "G", home: "Uruguay", away: "Senegal", date: "2026-06-21T14:00:00-05:00", venue: "Estadio Akron, Guadalajara" },
+  { id: 40, group: "G", home: "Netherlands", away: "Colombia", date: "2026-06-21T20:00:00-05:00", venue: "MetLife Stadium, New York" },
+  { id: 41, group: "G", home: "Senegal", away: "Netherlands", date: "2026-06-25T16:00:00-05:00", venue: "Rose Bowl, Los Angeles" },
+  { id: 42, group: "G", home: "Uruguay", away: "Colombia", date: "2026-06-25T16:00:00-05:00", venue: "Estadio Azteca, Mexico City" },
+  { id: 43, group: "H", home: "Italy", away: "Ecuador", date: "2026-06-17T14:00:00-05:00", venue: "AT&T Stadium, Dallas" },
+  { id: 44, group: "H", home: "Croatia", away: "Iran", date: "2026-06-17T20:00:00-05:00", venue: "SoFi Stadium, Los Angeles" },
+  { id: 45, group: "H", home: "Ecuador", away: "Iran", date: "2026-06-21T17:00:00-05:00", venue: "MetLife Stadium, New York" },
+  { id: 46, group: "H", home: "Italy", away: "Croatia", date: "2026-06-22T20:00:00-05:00", venue: "BC Place, Vancouver" },
+  { id: 47, group: "H", home: "Iran", away: "Italy", date: "2026-06-26T16:00:00-05:00", venue: "Estadio Akron, Guadalajara" },
+  { id: 48, group: "H", home: "Croatia", away: "Ecuador", date: "2026-06-26T16:00:00-05:00", venue: "Arrowhead Stadium, Kansas City" },
 ];
 
 const ADMIN_CODE = "PREDIZONE_ADMIN_2026";
-const STORAGE_KEYS = { users:"pz_users", predictions:"pz_predictions", results:"pz_results", session:"pz_session", knockout:"pz_knockout" };
-const ROUNDS = ["Round of 32","Round of 16","Quarterfinal","Semifinal","Third Place","Final"];
+const STORAGE_KEYS = { users: "pz_users", predictions: "pz_predictions", results: "pz_results", session: "pz_session", knockout: "pz_knockout" };
+const ROUNDS = ["Round of 32", "Round of 16", "Quarterfinal", "Semifinal", "Third Place", "Final"];
 const STUDY_YEARS = ["1st Year", "2nd Year", "3rd Year", "4th Year"];
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 
 // ─── FLAGS ────────────────────────────────────────────────────────────────────
 const FLAGS = {
-  "Mexico":"🇲🇽","Ecuador":"🇪🇨","USA":"🇺🇸","Bolivia":"🇧🇴","Argentina":"🇦🇷","Morocco":"🇲🇦",
-  "Ukraine":"🇺🇦","Iraq":"🇮🇶","France":"🇫🇷","Saudi Arabia":"🇸🇦","Japan":"🇯🇵","New Zealand":"🇳🇿",
-  "Spain":"🇪🇸","South Korea":"🇰🇷","Germany":"🇩🇪","Nigeria":"🇳🇬","Brazil":"🇧🇷","Serbia":"🇷🇸",
-  "England":"🏴󠁧󠁢󠁥󠁮󠁧󠁿","Australia":"🇦🇺","Portugal":"🇵🇹","Cameroon":"🇨🇲","Belgium":"🇧🇪",
-  "Venezuela":"🇻🇪","Netherlands":"🇳🇱","Uruguay":"🇺🇾","Colombia":"🇨🇴","Senegal":"🇸🇳",
-  "Italy":"🇮🇹","Croatia":"🇭🇷","Iran":"🇮🇷","Draw":"🤝"
+  "Mexico": "🇲🇽", "Ecuador": "🇪🇨", "USA": "🇺🇸", "Bolivia": "🇧🇴", "Argentina": "🇦🇷", "Morocco": "🇲🇦",
+  "Ukraine": "🇺🇦", "Iraq": "🇮🇶", "France": "🇫🇷", "Saudi Arabia": "🇸🇦", "Japan": "🇯🇵", "New Zealand": "🇳🇿",
+  "Spain": "🇪🇸", "South Korea": "🇰🇷", "Germany": "🇩🇪", "Nigeria": "🇳🇬", "Brazil": "🇧🇷", "Serbia": "🇷🇸",
+  "England": "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "Australia": "🇦🇺", "Portugal": "🇵🇹", "Cameroon": "🇨🇲", "Belgium": "🇧🇪",
+  "Venezuela": "🇻🇪", "Netherlands": "🇳🇱", "Uruguay": "🇺🇾", "Colombia": "🇨🇴", "Senegal": "🇸🇳",
+  "Italy": "🇮🇹", "Croatia": "🇭🇷", "Iran": "🇮🇷", "Draw": "🤝"
 };
 const fl = t => FLAGS[t] || "🌍";
 
@@ -135,18 +135,63 @@ const TEAMS = buildTeamsFromFixtures();
 
 // ─── SPONSORS DATA ────────────────────────────────────────────────────────────
 const SPONSORS = [
-  { 
-    label: "FULVA", 
-    name: "Fulva Café & Bakery", 
+  {
+    label: "FULVA",
+    name: "Fulva Café & Bakery",
     desc: "Official Catering & Refreshments Partner",
     logo: "/sponsor_fulva.png"
   },
-  { 
-    label: "RF INDUSTRIES", 
-    name: "RF Apparel", 
+  {
+    label: "RF INDUSTRIES",
+    name: "RF Apparel",
     desc: "Official Apparel & Sports Gear Supplier",
     logo: "/sponsor_rf.png"
   }
+];
+
+const HERO_STEPS = [
+  {
+    icon: User,
+    title: "Sign In",
+    desc: "Log in with Google using your name, department, and year of study.",
+  },
+  {
+    icon: Target,
+    title: "Predict",
+    desc: "Pick match winners and exact scorelines before kickoff — each match locks 30 min early.",
+  },
+  {
+    icon: Award,
+    title: "Compete",
+    desc: "Earn up to 5 points per match and climb the campus leaderboard for 1st, 2nd, and 3rd place.",
+  },
+];
+
+const OFFICIAL_RULES = [
+  { num: 1, text: "All predictions must be submitted through the official Predizone website." },
+  { num: 2, text: "Participants must log in using their full name, department, and year of study before submitting predictions." },
+  { num: 3, text: "Predictions for each match will open in the morning and close 30 minutes before the match begins." },
+  {
+    num: 4,
+    text: "Participants must predict:",
+    bullets: ["The winner of the match, and/or", "The exact final scoreline."],
+  },
+  {
+    num: 5,
+    text: "Score predictions must be entered in the correct order. For example, if the match is Argentina vs Brazil and you predict 3–2, it means Argentina 3 – Brazil 2.",
+  },
+  {
+    num: 6,
+    text: "Points will be awarded as follows:",
+    bullets: [
+      "Correct winner prediction: 3 points",
+      "Correct scoreline prediction: 2 points",
+      "Correct winner and scoreline prediction: 5 points",
+    ],
+  },
+  { num: 7, text: "Participants can track their scores and rankings through the Predizone leaderboard on the official website." },
+  { num: 8, text: "At the end of the tournament, the participants with the highest points will be awarded 1st, 2nd, and 3rd places." },
+  { num: 9, text: "In the event of a tie, the final decision will be made by the Predizone Organizing Team." },
 ];
 
 // ─── FALLBACK STORAGE ─────────────────────────────────────────────────────────
@@ -159,7 +204,7 @@ async function load(key) {
       const r = localStorage.getItem(key);
       return r ? JSON.parse(r) : null;
     }
-  } catch(e) {
+  } catch (e) {
     console.error("Storage load failed:", e);
     return null;
   }
@@ -172,7 +217,7 @@ async function save(key, val) {
     } else {
       localStorage.setItem(key, JSON.stringify(val));
     }
-  } catch(e) {
+  } catch (e) {
     console.error("Storage save failed:", e);
   }
 }
@@ -181,7 +226,7 @@ async function save(key, val) {
 function isSameLocalDay(dateStr) {
   const d = new Date(dateStr);
   const now = new Date();
-  return d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth() && d.getDate()===now.getDate();
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
 }
 
 function isLocked(fixture) {
@@ -199,20 +244,73 @@ function getStatus(fixture) {
 
 function formatDate(ds) {
   const d = new Date(ds);
-  return d.toLocaleDateString("en-IN",{weekday:"short",month:"short",day:"numeric"}) +
-    " • " + d.toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"});
+  return d.toLocaleDateString("en-IN", { weekday: "short", month: "short", day: "numeric" }) +
+    " • " + d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
 }
 
 function todayLabel() {
-  return new Date().toLocaleDateString("en-IN",{weekday:"long",month:"long",day:"numeric",year:"numeric"});
+  return new Date().toLocaleDateString("en-IN", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 }
 
-function calcPoints(pred, res) {
+function hasScoreline(entry) {
+  return entry?.homeGoals !== undefined && entry?.awayGoals !== undefined;
+}
+
+function formatScoreline(homeGoals, awayGoals) {
+  return `${homeGoals}–${awayGoals}`;
+}
+
+function winnerFromScore(home, away, homeTeam, awayTeam) {
+  const h = parseInt(home, 10);
+  const a = parseInt(away, 10);
+  if (h > a) return homeTeam;
+  if (a > h) return awayTeam;
+  return "Draw";
+}
+
+function calcPoints(pred, res, fixture) {
   if (!pred || !res) return 0;
+  const winnerCorrect = pred.winner && res.winner && pred.winner === res.winner;
+  const scorelineCorrect =
+    hasScoreline(pred) &&
+    hasScoreline(res) &&
+    parseInt(pred.homeGoals, 10) === parseInt(res.homeGoals, 10) &&
+    parseInt(pred.awayGoals, 10) === parseInt(res.awayGoals, 10);
+
+  if (winnerCorrect && scorelineCorrect) return 5;
+  if (winnerCorrect) return 3;
+  if (scorelineCorrect) return 2;
+
+  // Legacy combined-goals scoring for older stored data
+  if (!fixture || pred.goals === undefined || res.goals === undefined) return 0;
   let p = 0;
   if (pred.winner === res.winner) p += 3;
-  if (parseInt(pred.goals) === parseInt(res.goals)) p += 2;
-  return p;
+  if (parseInt(pred.goals, 10) === parseInt(res.goals, 10)) p += 2;
+  return p > 5 ? 5 : p;
+}
+
+function formatPredictionSummary(pred, fixture) {
+  if (!pred) return "";
+  const parts = [];
+  if (pred.winner) parts.push(`${fl(pred.winner)} ${pred.winner}`);
+  if (hasScoreline(pred) && fixture) {
+    parts.push(`${fixture.home} ${formatScoreline(pred.homeGoals, pred.awayGoals)} ${fixture.away}`);
+  } else if (pred.goals !== undefined) {
+    parts.push(`${pred.goals} combined goals`);
+  }
+  return parts.join(" · ");
+}
+
+function formatResultSummary(res, fixture) {
+  if (!res) return "";
+  const parts = [];
+  if (res.winner) parts.push(`${fl(res.winner)} ${res.winner}`);
+  if (hasScoreline(res) && fixture) {
+    parts.push(`${fixture.home} ${formatScoreline(res.homeGoals, res.awayGoals)} ${fixture.away}`);
+  } else if (res.goals !== undefined) {
+    parts.push(`${res.goals} combined goals`);
+  }
+  return parts.join(" · ");
 }
 
 function buildLeaderboard(users, predictions, results, knockoutFixtures) {
@@ -222,10 +320,10 @@ function buildLeaderboard(users, predictions, results, knockoutFixtures) {
     allFixtures.forEach(fix => {
       const pred = predictions[`${u.id}_${fix.id}`];
       const res = results[fix.id];
-      if (pred && res) pts += calcPoints(pred, res);
+      if (pred && res) pts += calcPoints(pred, res, fix);
     });
     return { ...u, points: pts };
-  }).sort((a,b) => b.points - a.points);
+  }).sort((a, b) => b.points - a.points);
 }
 
 function decodeJwt(token) {
@@ -247,17 +345,17 @@ function decodeJwt(token) {
 }
 
 function makeUserId(name, dept) {
-  const n = name.trim().toLowerCase().replace(/\s+/g," ").replace(/[^a-z0-9 ]/g,"");
-  const d = dept.trim().toLowerCase().replace(/\s+/g,"").replace(/[^a-z0-9]/g,"");
+  const n = name.trim().toLowerCase().replace(/\s+/g, " ").replace(/[^a-z0-9 ]/g, "");
+  const d = dept.trim().toLowerCase().replace(/\s+/g, "").replace(/[^a-z0-9]/g, "");
   return `${n}__${d}`;
 }
 
 function normaliseName(name) {
-  return name.trim().replace(/\s+/g," ").replace(/\b\w/g, c => c.toUpperCase());
+  return name.trim().replace(/\s+/g, " ").replace(/\b\w/g, c => c.toUpperCase());
 }
 
 function normaliseDept(dept) {
-  return dept.trim().replace(/\s+/g," ");
+  return dept.trim().replace(/\s+/g, " ");
 }
 
 function addRipple(e) {
@@ -265,7 +363,7 @@ function addRipple(e) {
   const dot = document.createElement("span");
   const rect = btn.getBoundingClientRect();
   dot.className = "ripple-dot";
-  dot.style.top  = (e.clientY - rect.top)  + "px";
+  dot.style.top = (e.clientY - rect.top) + "px";
   dot.style.left = (e.clientX - rect.left) + "px";
   btn.appendChild(dot);
   setTimeout(() => dot.remove(), 600);
@@ -295,7 +393,7 @@ function FixedVideoBackground({ src, fallbackSrc }) {
     const tryPlay = () => {
       const p = video.play();
       if (p && typeof p.catch === "function") {
-        p.catch(() => {});
+        p.catch(() => { });
       }
     };
 
@@ -364,10 +462,10 @@ function BlurText({ text, className }) {
           animate={
             isInView
               ? {
-                  filter: ["blur(10px)", "blur(5px)", "blur(0px)"],
-                  opacity: [0, 0.5, 1],
-                  y: [50, -5, 0],
-                }
+                filter: ["blur(10px)", "blur(5px)", "blur(0px)"],
+                opacity: [0, 0.5, 1],
+                y: [50, -5, 0],
+              }
               : {}
           }
           transition={{
@@ -426,11 +524,12 @@ export default function App() {
   // Modals controllers
   const [predFixture, setPredFixture] = useState(null);
   const [predWinner, setPredWinner] = useState("");
-  const [predGoals, setPredGoals] = useState("");
+  const [predHomeGoals, setPredHomeGoals] = useState("");
+  const [predAwayGoals, setPredAwayGoals] = useState("");
 
   const [selFixture, setSelFixture] = useState(null);
-  const [resWinner, setResWinner] = useState("");
-  const [resGoals, setResGoals] = useState("");
+  const [resHomeGoals, setResHomeGoals] = useState("");
+  const [resAwayGoals, setResAwayGoals] = useState("");
 
   const [showAddMatch, setShowAddMatch] = useState(false);
   const [editingMatch, setEditingMatch] = useState(null);
@@ -457,7 +556,7 @@ export default function App() {
     const sub = payload.sub; // Unique Google user ID
 
     const savedUsers = await load(STORAGE_KEYS.users) || {};
-    
+
     // Check if the user is a returning player
     if (savedUsers[sub]) {
       const user = savedUsers[sub];
@@ -483,13 +582,13 @@ export default function App() {
 
   const handleCompleteRegistration = async () => {
     if (!pendingGoogleUser) return;
-    
+
     const rawName = registerName.trim();
     const rawDept = registerDept.trim();
 
-    if (rawName.length < 3) { showToast("Enter your full name (min 3 characters)!","error"); return; }
-    if (!/^[a-zA-Z\s]+$/.test(rawName)) { showToast("Name should only contain letters!","error"); return; }
-    if (rawDept.length < 2) { showToast("Enter your department name!","error"); return; }
+    if (rawName.length < 3) { showToast("Enter your full name (min 3 characters)!", "error"); return; }
+    if (!/^[a-zA-Z\s]+$/.test(rawName)) { showToast("Name should only contain letters!", "error"); return; }
+    if (rawDept.length < 2) { showToast("Enter your department name!", "error"); return; }
 
     const name = normaliseName(rawName);
     const dept = normaliseDept(rawDept);
@@ -540,7 +639,7 @@ export default function App() {
     setCurrentSlide(0);
     if (window.history.pushState) {
       const newurl = window.location.protocol + "//" + window.location.host + window.location.pathname;
-      window.history.pushState({path:newurl},'',newurl);
+      window.history.pushState({ path: newurl }, '', newurl);
     }
     setIsAdminView(false);
   };
@@ -662,38 +761,75 @@ export default function App() {
 
   // ─── GAME CONTROLLERS ───────────────────────────────────────────────────────
   const handleSavePrediction = async () => {
-    if (!predWinner) { showToast("Select winner!","error"); return; }
-    if (predGoals==="" || isNaN(predGoals) || parseInt(predGoals)<0) { showToast("Enter valid total goals (0 or more)!","error"); return; }
-    if (isLocked(predFixture)) { showToast("Match predictions are locked!","error"); return; }
-    
+    const hasWinner = !!predWinner;
+    const hasScore =
+      predHomeGoals !== "" &&
+      predAwayGoals !== "" &&
+      !isNaN(predHomeGoals) &&
+      !isNaN(predAwayGoals) &&
+      parseInt(predHomeGoals, 10) >= 0 &&
+      parseInt(predAwayGoals, 10) >= 0;
+
+    if (!hasWinner && !hasScore) {
+      showToast("Predict the winner and/or exact scoreline!", "error");
+      return;
+    }
+    if (hasScore && hasWinner) {
+      const derivedWinner = winnerFromScore(predHomeGoals, predAwayGoals, predFixture.home, predFixture.away);
+      if (derivedWinner !== predWinner) {
+        showToast("Winner must match your scoreline!", "error");
+        return;
+      }
+    }
+    if (isLocked(predFixture)) { showToast("Match predictions are locked!", "error"); return; }
+
     const key = `${currentUser.id}_${predFixture.id}`;
-    if (predictions[key]) { showToast("Prediction already locked!","error"); return; }
-    
-    const newPreds = { 
-      ...predictions, 
-      [key]: { winner: predWinner, goals: parseInt(predGoals), submittedAt: new Date().toISOString() }
+    if (predictions[key]) { showToast("Prediction already locked!", "error"); return; }
+
+    const newPreds = {
+      ...predictions,
+      [key]: {
+        ...(hasWinner ? { winner: predWinner } : {}),
+        ...(hasScore ? { homeGoals: parseInt(predHomeGoals, 10), awayGoals: parseInt(predAwayGoals, 10) } : {}),
+        submittedAt: new Date().toISOString(),
+      },
     };
     setPredictions(newPreds);
     await save(STORAGE_KEYS.predictions, newPreds);
     setPredFixture(null);
     setPredWinner("");
-    setPredGoals("");
+    setPredHomeGoals("");
+    setPredAwayGoals("");
     showToast("Prediction locked successfully!");
   };
 
   const handleSaveResult = async () => {
-    if (!resWinner) { showToast("Select winner!","error"); return; }
-    if (resGoals==="" || isNaN(resGoals)) { showToast("Enter goals!","error"); return; }
-    
-    const newResults = { 
-      ...results, 
-      [selFixture.id]: { winner: resWinner, goals: parseInt(resGoals), enteredAt: new Date().toISOString() }
+    if (resHomeGoals === "" || resAwayGoals === "" || isNaN(resHomeGoals) || isNaN(resAwayGoals)) {
+      showToast("Enter the full scoreline!", "error");
+      return;
+    }
+
+    const homeGoals = parseInt(resHomeGoals, 10);
+    const awayGoals = parseInt(resAwayGoals, 10);
+    if (homeGoals < 0 || awayGoals < 0) {
+      showToast("Enter a valid scoreline!", "error");
+      return;
+    }
+
+    const newResults = {
+      ...results,
+      [selFixture.id]: {
+        winner: winnerFromScore(homeGoals, awayGoals, selFixture.home, selFixture.away),
+        homeGoals,
+        awayGoals,
+        enteredAt: new Date().toISOString(),
+      },
     };
     setResults(newResults);
     await save(STORAGE_KEYS.results, newResults);
     setSelFixture(null);
-    setResWinner("");
-    setResGoals("");
+    setResHomeGoals("");
+    setResAwayGoals("");
     showToast("Score updated. Leaderboards re-calculated!");
   };
 
@@ -719,40 +855,42 @@ export default function App() {
 
     if (diff === 0) {
       return {
-        transform: "translateX(-50%) scale(1)",
-        filter: "brightness(0.72)",
+        top: "50%",
+        transform: "translate(-50%, -50%) scale(1)",
+        filter: "brightness(1)",
         zIndex: 20,
         opacity: 1,
-        bottom: isMobile ? "28vh" : "12vh",
-        width: isMobile ? "min(72vw, 320px)" : "clamp(200px, 38vw, 420px)",
-        height: isMobile ? "min(50vh, 440px)" : "auto",
+        width: isMobile ? "min(68vw, 300px)" : "clamp(200px, 38vw, 420px)",
+        height: isMobile ? "min(42vh, 360px)" : "auto",
       };
     } else if (Math.abs(diff) === 1) {
       const side = diff > 0 ? 1 : -1;
-      const offset = isMobile ? 36 : 45;
+      const offset = isMobile ? 34 : 45;
       return {
-        transform: `translateX(calc(-50% + ${side * offset}%)) scale(${isMobile ? 0.82 : 0.78})`,
-        filter: "brightness(1)",
+        top: "50%",
+        transform: `translate(calc(-50% + ${side * offset}%), -50%) scale(${isMobile ? 0.82 : 0.78})`,
+        filter: "brightness(0.72)",
         zIndex: 10,
         opacity: 0.85,
-        bottom: isMobile ? "28vh" : "12vh",
-        width: isMobile ? "min(58vw, 260px)" : "clamp(160px, 30vw, 340px)",
-        height: isMobile ? "min(40vh, 340px)" : "auto",
+        width: isMobile ? "min(52vw, 230px)" : "clamp(160px, 30vw, 340px)",
+        height: isMobile ? "min(34vh, 300px)" : "auto",
       };
     } else {
       const side = diff > 0 ? 1 : -1;
-      const offset = isMobile ? 70 : 80;
+      const offset = isMobile ? 68 : 80;
       return {
-        transform: `translateX(calc(-50% + ${side * offset}%)) scale(0.55)`,
+        top: "50%",
+        transform: `translate(calc(-50% + ${side * offset}%), -50%) scale(0.55)`,
         filter: "brightness(0.45)",
         zIndex: 1,
         opacity: 0,
-        bottom: isMobile ? "28vh" : "12vh",
-        width: isMobile ? "min(44vw, 200px)" : "clamp(120px, 22vw, 260px)",
-        height: isMobile ? "min(30vh, 240px)" : "auto",
+        width: isMobile ? "min(38vw, 170px)" : "clamp(120px, 22vw, 260px)",
+        height: isMobile ? "min(24vh, 220px)" : "auto",
       };
     }
   };
+
+  const jerseySwipeStart = useRef(null);
 
   const navigateTeams = (dir) => {
     if (isAnimating) return;
@@ -762,6 +900,19 @@ export default function App() {
       return (prev - 1 + TEAMS.length) % TEAMS.length;
     });
     setTimeout(() => setIsAnimating(false), 700);
+  };
+
+  const handleJerseyTouchStart = (e) => {
+    jerseySwipeStart.current = e.touches[0].clientX;
+  };
+
+  const handleJerseyTouchEnd = (e) => {
+    if (jerseySwipeStart.current === null) return;
+    const deltaX = e.changedTouches[0].clientX - jerseySwipeStart.current;
+    if (Math.abs(deltaX) > 48) {
+      navigateTeams(deltaX < 0 ? "next" : "prev");
+    }
+    jerseySwipeStart.current = null;
   };
 
   // ─── ADMIN HELPERS ───────────────────────────────────────────────────────────
@@ -819,7 +970,7 @@ export default function App() {
   const leaderboard = buildLeaderboard(users, predictions, results, knockoutFixtures);
   const allFixtures = [...FIXTURES, ...knockoutFixtures];
   const todayFixtures = allFixtures.filter(f => isSameLocalDay(f.date));
-  const groups = ["A","B","C","D","E","F","G","H"];
+  const groups = ["A", "B", "C", "D", "E", "F", "G", "H"];
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center h-screen bg-black text-white gap-4">
@@ -830,7 +981,7 @@ export default function App() {
 
   return (
     <div className="relative w-full overflow-hidden bg-black text-white font-body selection:bg-white/20">
-      
+
       {/* Toast Alert */}
       {toast && (
         <div className="toast-msg glass-panel p-4 rounded-[1.25rem] flex items-center gap-3 bg-black/90 border border-white/25 shadow-2xl max-w-sm pointer-events-auto">
@@ -851,16 +1002,16 @@ export default function App() {
             <ShieldAlert className="h-12 w-12 text-white mb-4" />
             <h2 className="font-heading italic text-3xl text-white tracking-tight text-center">System Lock</h2>
             <p className="text-xs text-white/60 uppercase tracking-widest mt-1 mb-6">Security Access Required</p>
-            
+
             <div className="w-full mb-6">
               <label className="block text-[11px] font-semibold text-white/80 uppercase tracking-wider mb-2">Security Code</label>
-              <input 
+              <input
                 className="input-glass w-full px-4 py-3 rounded-xl text-center text-lg tracking-widest font-semibold"
                 type="password"
                 placeholder="••••••••••••••"
                 value={adminCode}
-                onChange={e=>setAdminCode(e.target.value)}
-                onKeyDown={e=>e.key==="Enter"&&handleAdminLogin()}
+                onChange={e => setAdminCode(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handleAdminLogin()}
               />
             </div>
 
@@ -885,13 +1036,17 @@ export default function App() {
           />
 
           <nav className="fixed top-4 left-0 w-full px-8 lg:px-16 z-50 flex items-center justify-between pointer-events-auto">
-            <div className="w-12 h-12 rounded-full liquid-glass flex items-center justify-center font-heading italic text-2xl text-white cursor-pointer select-none" onClick={() => scrollToSlide(0)}>
-              p
-            </div>
+            <button
+              type="button"
+              className="liquid-glass px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-full cursor-pointer select-none"
+              onClick={() => scrollToSlide(0)}
+            >
+              <span className="font-heading italic text-base sm:text-xl tracking-tight text-white uppercase font-bold">PREDIZONE</span>
+            </button>
             <div className="hidden sm:flex liquid-glass px-1.5 py-1.5 rounded-full items-center gap-1 shadow-lg">
               {["Welcome", "How to Play", "Teams", "Sponsors", "Join"].map((item, index) => (
-                <button 
-                  key={item} 
+                <button
+                  key={item}
                   className="px-4 py-1.5 text-xs uppercase tracking-wider text-white/80 hover:text-white font-medium transition-colors"
                   onClick={() => scrollToSlide(index)}
                 >
@@ -899,7 +1054,7 @@ export default function App() {
                 </button>
               ))}
             </div>
-            <button 
+            <button
               className="px-5 py-2.5 rounded-full bg-white text-black text-xs font-semibold uppercase tracking-wider hover:bg-white/90 transition-colors shadow-lg whitespace-nowrap flex items-center gap-1.5"
               onClick={() => scrollToSlide(4)}
             >
@@ -908,44 +1063,45 @@ export default function App() {
           </nav>
 
           <div ref={containerRef} onScroll={handleScroll} className="scroll-container scroll-container--over-video">
-            
+
             {/* SLIDE 1: Hero welcome page */}
-            <div className="scroll-section scroll-section--over-video">
-              {/* Slide Content layout */}
-              <div className="relative z-10 pt-16 sm:pt-20 md:pt-24 px-4 flex flex-col items-center justify-center flex-1 max-w-4xl text-center">
-                
+            <div className="scroll-section scroll-section--over-video scroll-section--hero">
+              <div className="scroll-slide-inner px-4 max-w-4xl text-center mx-auto w-full">
+
                 {/* Football tournament badge */}
-                <motion.div 
+                <motion.div
                   initial={{ filter: "blur(10px)", opacity: 0, y: 20 }}
                   animate={{ filter: "blur(0px)", opacity: 1, y: 0 }}
                   transition={{ duration: 0.6, ease: "easeOut", delay: 0.4 }}
-                  className="liquid-glass py-1 pl-1 pr-3 rounded-full flex items-center gap-3 text-xs mb-6 max-w-full"
+                  className="lg:mt-24 py-2 px-3 sm:py-1.5 sm:pl-1.5 sm:pr-4 rounded-full inline-flex items-center justify-center gap-2 sm:gap-3 text-xs mt-0 md:mt-0 mb-6 max-w-full mx-auto bg-red-950/40 border border-red-500/30 backdrop-blur-md shadow-lg flex-nowrap whitespace-nowrap"
                 >
-                  <span className="bg-white text-black px-2.5 py-1 rounded-full font-bold uppercase tracking-wider text-[10px]">WC 2026</span>
-                  <span className="text-white/95 truncate">FIFA World Cup College Prediction Arena</span>
+                  <span className="bg-white text-black px-2.5 py-1 rounded-full font-bold uppercase tracking-wider text-[10px] shrink-0">WC 2026</span>
+                  <span className="text-white/95 text-[11px] sm:text-xs leading-none font-medium tracking-wide">
+                    FIFA World Cup College Prediction Arena
+                  </span>
                 </motion.div>
 
                 {/* Staggered word blur-in title */}
-                <BlurText 
-                  text="CHALLENGE THE CAMPUS STANDINGS"
-                  className="text-5xl md:text-7xl lg:text-[5.5rem] font-heading italic text-white leading-[0.85] max-w-2xl justify-center tracking-[-3px] uppercase font-bold"
+                <BlurText
+                  text="PREDICT MATCHES. WIN THE LEAGUE."
+                  className="text-4xl sm:text-5xl md:text-7xl lg:text-[5.5rem] font-heading italic text-white leading-[0.9] max-w-3xl justify-center tracking-[-2px] sm:tracking-[-3px] uppercase font-bold"
                 />
 
-                <motion.p 
+                <motion.p
                   initial={{ filter: "blur(10px)", opacity: 0, y: 20 }}
                   animate={{ filter: "blur(0px)", opacity: 1, y: 0 }}
                   transition={{ duration: 0.6, ease: "easeOut", delay: 0.8 }}
-                  className="mt-6 text-sm md:text-base text-white/80 max-w-xl font-light leading-snug"
+                  className="mt-6 text-sm md:text-base text-white/80 max-w-xl mx-auto font-light leading-relaxed"
                 >
-                  Predict fixture score lines, accumulate points, and climb the college leaderboard. 100% secure profile linking via Google Sign-In.
+                  Predizone is your official FIFA World Cup 2026 prediction arena. Sign in, submit your picks for today&apos;s fixtures, earn points for correct winners and scorelines, and compete with students across campus.
                 </motion.p>
 
                 {/* CTA trigger */}
-                <motion.div 
+                <motion.div
                   initial={{ filter: "blur(10px)", opacity: 0, y: 20 }}
                   animate={{ filter: "blur(0px)", opacity: 1, y: 0 }}
                   transition={{ duration: 0.6, ease: "easeOut", delay: 1.1 }}
-                  className="flex items-center gap-6 mt-8"
+                  className="flex items-center justify-center gap-6 mt-8"
                 >
                   <button className="liquid-glass-strong px-7 py-3 rounded-full text-xs uppercase tracking-wider font-semibold text-white flex items-center gap-2" onClick={() => scrollToSlide(4)}>
                     Start Predicting <ArrowUpRight className="h-4 w-4" />
@@ -955,213 +1111,204 @@ export default function App() {
                   </button>
                 </motion.div>
 
-                {/* Stats cards columns */}
-                <motion.div 
+                {/* How it works */}
+                <motion.div
                   initial={{ filter: "blur(10px)", opacity: 0, y: 20 }}
                   animate={{ filter: "blur(0px)", opacity: 1, y: 0 }}
                   transition={{ duration: 0.6, ease: "easeOut", delay: 1.3 }}
-                  className="flex items-stretch justify-center gap-4 mt-12 w-full flex-wrap"
+                  className="mt-8 sm:mt-12 w-full max-w-3xl"
                 >
-                  <div className="liquid-glass p-5 w-[200px] text-left rounded-[1.25rem] border border-white/5">
-                    <Calendar className="h-7 w-7 text-white mb-6" />
-                    <span className="font-heading italic text-3xl tracking-tight text-white leading-none block">48 Matches</span>
-                    <span className="text-[11px] text-white/50 uppercase tracking-widest mt-2 block">Total Fixtures Pool</span>
-                  </div>
-                  <div className="liquid-glass p-5 w-[200px] text-left rounded-[1.25rem] border border-white/5">
-                    <BarChart2 className="h-7 w-7 text-white mb-6" />
-                    <span className="font-heading italic text-3xl tracking-tight text-white leading-none block">1,200+</span>
-                    <span className="text-[11px] text-white/50 uppercase tracking-widest mt-2 block">Registered Students</span>
+                  <p className="text-[10px] sm:text-xs text-white/45 uppercase tracking-[0.2em] font-semibold mb-4">
+                    How it works
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 text-left mb-8 pb-8">
+                    {HERO_STEPS.map((step, i) => {
+                      const Icon = step.icon;
+                      return (
+                        <div key={step.title} className="liquid-glass p-3 sm:p-4 rounded-[1.25rem] border border-white/5">
+                          <div className="frozen-inner rounded-xl p-4 h-full">
+                            <div className="flex items-center gap-2.5 mb-3">
+                              <span className="frozen-tag w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-bold text-white/70">
+                                {i + 1}
+                              </span>
+                              <Icon className="h-5 w-5 text-white/90 shrink-0" />
+                            </div>
+                            <h3 className="font-heading italic text-xl text-white uppercase tracking-tight leading-none">
+                              {step.title}
+                            </h3>
+                            <p className="mt-2 text-[11px] sm:text-xs text-white/60 leading-relaxed font-light">
+                              {step.desc}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </motion.div>
 
               </div>
             </div>
 
-            {/* SLIDE 2: How It Works / Capabilities */}
+            {/* SLIDE 2: Official tournament rules */}
             <div className="scroll-section scroll-section--over-video scroll-section--predict">
-              <div className="predict-slide__inner relative z-10 px-4 sm:px-8 md:px-16 lg:px-20 pt-24 pb-8 md:pb-12 flex flex-col w-full max-w-7xl mx-auto justify-start gap-5 md:gap-8">
-                
+              <div className="predict-slide__inner relative z-10 px-4 sm:px-8 md:px-16 lg:px-20 flex flex-col w-full max-w-7xl mx-auto justify-start gap-5 md:gap-8">
+
                 <div className="text-left shrink-0">
                   <h2 className="font-heading italic text-white text-4xl sm:text-5xl md:text-7xl lg:text-[5.5rem] leading-[0.9] tracking-[-3px] uppercase">
-                    PREDICT & WIN
+                    OFFICIAL RULES
                   </h2>
+                  <p className="mt-3 text-xs sm:text-sm text-white/55 uppercase tracking-widest font-semibold">
+                    Predizone tournament guidelines
+                  </p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 w-full">
-                  
-                  {/* Card 1 */}
-                  <div className="liquid-glass rounded-[1.25rem] p-4 sm:p-6 md:min-h-[260px] flex flex-col justify-between border border-white/5 hover:border-white/10 transition-colors">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="w-11 h-11 rounded-xl liquid-glass flex items-center justify-center text-white">
-                        <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
-                          <path d="M5 21q-.825 0-1.412-.587T3 19V5q0-.825.588-1.412T5 3h14q.825 0 1.413.588T21 5v14q0 .825-.587 1.413T19 21H5Zm1-4h12l-3.75-5-3 4L9 13l-3 4Z" />
-                        </svg>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 w-full pb-20">
+                  {OFFICIAL_RULES.map((rule) => (
+                    <div
+                      key={rule.num}
+                      className="liquid-glass rounded-[1.25rem] p-4 sm:p-5 border border-white/5 hover:border-white/10 transition-colors flex flex-col gap-3"
+                    >
+                      <div className="frozen-inner rounded-xl px-3 py-2.5 flex items-center gap-3">
+                        <span className="frozen-tag w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold text-white shrink-0">
+                          {rule.num}
+                        </span>
+                        <span className="text-[10px] uppercase tracking-[0.2em] text-white/45 font-bold">
+                          Rule {rule.num}
+                        </span>
                       </div>
-                      <div className="flex flex-wrap justify-end gap-1.5 max-w-[70%]">
-                        {["+3 Points", "Winner Result", "Draw Option"].map(tag => (
-                          <span key={tag} className="liquid-glass px-2.5 py-1 rounded-full text-[10px] uppercase tracking-wider text-white/85 font-medium whitespace-nowrap">{tag}</span>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="mt-4 sm:mt-6 text-left">
-                      <h3 className="font-heading italic text-white text-xl sm:text-2xl md:text-3xl tracking-tight leading-none uppercase">Match Winners</h3>
-                      <p className="mt-2 sm:mt-3 text-xs text-white/70 leading-relaxed font-light max-w-[32ch]">
-                        Predict correct fixture outcomes (Home Win, Away Win, or Draw) to secure 3 points instantly when the final whistle blows.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Card 2 */}
-                  <div className="liquid-glass rounded-[1.25rem] p-4 sm:p-6 md:min-h-[260px] flex flex-col justify-between border border-white/5 hover:border-white/10 transition-colors">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="w-11 h-11 rounded-xl liquid-glass flex items-center justify-center text-white">
-                        <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
-                          <path d="M4 6.47 5.76 10H20v8H4V6.47M22 4h-4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.89-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4Z" />
-                        </svg>
-                      </div>
-                      <div className="flex flex-wrap justify-end gap-1.5 max-w-[70%]">
-                        {["+2 Points", "Total Goals", "Combined Score"].map(tag => (
-                          <span key={tag} className="liquid-glass px-2.5 py-1 rounded-full text-[10px] uppercase tracking-wider text-white/85 font-medium whitespace-nowrap">{tag}</span>
-                        ))}
+                      <div className="frozen-inner rounded-xl p-4 flex-1">
+                        <p className="text-xs sm:text-[13px] text-white/75 leading-relaxed font-light">
+                          {rule.text}
+                        </p>
+                        {rule.bullets && (
+                          <ul className="mt-2.5 space-y-1.5">
+                            {rule.bullets.map((item) => (
+                              <li key={item} className="text-xs text-white/65 leading-relaxed font-light flex gap-2">
+                                <span className="text-white/35 shrink-0">•</span>
+                                <span>{item}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                       </div>
                     </div>
-                    <div className="mt-4 sm:mt-6 text-left">
-                      <h3 className="font-heading italic text-white text-xl sm:text-2xl md:text-3xl tracking-tight leading-none uppercase">Exact Goals</h3>
-                      <p className="mt-2 sm:mt-3 text-xs text-white/70 leading-relaxed font-light max-w-[32ch]">
-                        Predict the exact combined total score goals scored by both teams to secure an additional 2 points.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Card 3 */}
-                  <div className="liquid-glass rounded-[1.25rem] p-4 sm:p-6 md:min-h-[260px] flex flex-col justify-between border border-white/5 hover:border-white/10 transition-colors">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="w-11 h-11 rounded-xl liquid-glass flex items-center justify-center text-white">
-                        <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
-                          <path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1Zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7Z" />
-                        </svg>
-                      </div>
-                      <div className="flex flex-wrap justify-end gap-1.5 max-w-[70%]">
-                        {["30 Min", "Lock Timer", "Integrity Lock"].map(tag => (
-                          <span key={tag} className="liquid-glass px-2.5 py-1 rounded-full text-[10px] uppercase tracking-wider text-white/85 font-medium whitespace-nowrap">{tag}</span>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="mt-4 sm:mt-6 text-left">
-                      <h3 className="font-heading italic text-white text-xl sm:text-2xl md:text-3xl tracking-tight leading-none uppercase">Match Lock</h3>
-                      <p className="mt-2 sm:mt-3 text-xs text-white/70 leading-relaxed font-light max-w-[32ch]">
-                        Predictions lock automatically 30 minutes before kick-off, securing tournament integrity for all participants.
-                      </p>
-                    </div>
-                  </div>
-
+                  ))}
                 </div>
 
               </div>
             </div>
 
             {/* SLIDE 3: Team jersey carousel — solid overlay, hides fixed video */}
-            <div 
-              className="scroll-section scroll-section--solid transition-colors duration-[650ms]"
+            <div
+              className="scroll-section scroll-section--solid scroll-section--teams transition-colors duration-[650ms]"
               style={{ backgroundColor: TEAMS[activeIndex].bg }}
             >
               {/* SVG Grain Overlay */}
               <div className="absolute inset-0 pointer-events-none z-50 opacity-40 bg-[url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22><filter id=%22noise%22><feTurbulence type=%22fractalNoise%22 baseFrequency=%220.9%22 numOctaves=%224%22 stitchTiles=%22stitch%22/></filter><rect width=%22200%22 height=%22200%22 filter=%22url(%23noise)%22 opacity=%220.08%22/></svg>')] bg-repeat" />
 
-              {/* Giant backdrop background text */}
-              <div className="absolute inset-x-0 top-[12%] sm:top-[18%] flex items-center justify-center pointer-events-none select-none z-[2] font-heading font-black opacity-30 text-white tracking-tight leading-none text-center">
-                <span className="font-heading font-bold" style={{ fontSize: "clamp(64px, 22vw, 380px)", fontFamily: "'Anton', sans-serif" }}>CONTENDERS</span>
-              </div>
+              <div className="teams-slide__shell">
+                <div className="teams-slide__header">
+                  <span className="text-[10px] font-bold tracking-[0.2em] text-white/80 uppercase">
+                    TEAM JERSEYS · {activeIndex + 1} / {TEAMS.length}
+                  </span>
+                  <button
+                    className="sm:hidden flex items-center gap-1 text-white/80 hover:text-white text-[10px] font-bold uppercase tracking-widest transition-colors"
+                    onClick={() => scrollToSlide(3)}
+                  >
+                    Sponsors <ArrowRight className="h-3 w-3" />
+                  </button>
+                  <button
+                    className="hidden sm:flex items-center gap-1 text-white hover:opacity-85 transition-opacity"
+                    onClick={() => scrollToSlide(3)}
+                  >
+                    <span className="font-heading uppercase font-normal tracking-tight leading-none text-2xl" style={{ fontFamily: "'Anton', sans-serif" }}>
+                      DISCOVER SPONSORS
+                    </span>
+                    <ArrowRight className="h-5 w-5" />
+                  </button>
+                </div>
 
-              {/* Top left mini branding label */}
-              <div className="absolute top-20 left-4 sm:top-6 sm:left-12 z-50 text-[10px] font-bold tracking-[0.2em] text-white/80 uppercase">
-                TEAM JERSEYS · {activeIndex + 1} / {TEAMS.length}
-              </div>
-
-              {/* Jersey carousel */}
-              <div className="jersey-carousel absolute inset-0 z-[3] overflow-hidden">
-                {TEAMS.map((entry, i) => {
-                  const roleStyle = getRoleStyle(i);
-                  return (
-                    <div 
-                      key={entry.name}
-                      className={`jersey-carousel__slide absolute left-1/2 origin-bottom${i === activeIndex ? " jersey-carousel__slide--active" : ""}`}
-                      style={{
-                        ...roleStyle,
-                        aspectRatio: "0.72 / 1",
-                        transition: "transform 650ms cubic-bezier(0.4,0,0.2,1), filter 650ms cubic-bezier(0.4,0,0.2,1), opacity 650ms cubic-bezier(0.4,0,0.2,1), left 650ms cubic-bezier(0.4,0,0.2,1)",
-                        willChange: "transform, filter, opacity"
-                      }}
-                    >
-                      <span className="jersey-carousel__shadow" aria-hidden="true" />
-                      <img 
-                        src={entry.jersey} 
-                        alt={`${entry.name} jersey`}
-                        className="relative z-[1] w-full h-full object-contain object-bottom select-none"
-                        draggable="false"
-                        onError={(e) => {
-                          if (e.currentTarget.src !== JERSEY_PLACEHOLDER) {
-                            e.currentTarget.src = JERSEY_PLACEHOLDER;
-                          }
-                        }}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Team details and controls */}
-              <div className="jersey-carousel__footer absolute bottom-4 left-4 right-4 sm:bottom-20 sm:left-24 sm:right-auto z-50 sm:max-w-[320px] text-left">
-                <div className="flex items-center justify-between sm:block gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-1 sm:mb-2">
-                      <span className="text-xl sm:text-2xl shrink-0">{fl(TEAMS[activeIndex].name)}</span>
-                      <h3 className="font-semibold uppercase tracking-widest text-sm sm:text-[22px] text-white leading-tight truncate">
-                        {TEAMS[activeIndex].team}
-                      </h3>
-                    </div>
-                    <p className="text-[10px] sm:text-xs text-white/70 leading-relaxed font-light mb-0 sm:mb-5">
-                      Group {TEAMS[activeIndex].group} · WC 2026
-                    </p>
+                <div className="teams-slide__stage">
+                  <div className="contenders-bg absolute inset-x-0 flex items-center justify-center pointer-events-none select-none z-[2] font-heading font-black opacity-30 text-white tracking-tight leading-none text-center">
+                    <span className="font-heading font-bold" style={{ fontSize: "clamp(64px, 22vw, 380px)", fontFamily: "'Anton', sans-serif" }}>CONTENDERS</span>
                   </div>
-                  <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                    <button 
-                      className="w-11 h-11 sm:w-16 sm:h-16 rounded-full border-2 border-white flex items-center justify-center text-white hover:scale-105 hover:bg-white/10 transition-all active:scale-95"
-                      onClick={() => navigateTeams("prev")}
-                    >
-                      <ArrowLeft className="h-5 w-5 sm:h-6 sm:w-6" />
-                    </button>
-                    <button 
-                      className="w-11 h-11 sm:w-16 sm:h-16 rounded-full border-2 border-white flex items-center justify-center text-white hover:scale-105 hover:bg-white/10 transition-all active:scale-95"
-                      onClick={() => navigateTeams("next")}
-                    >
-                      <ArrowRight className="h-5 w-5 sm:h-6 sm:w-6" />
-                    </button>
+
+                  <div
+                    className="jersey-carousel jersey-carousel--swipeable z-[3]"
+                    onTouchStart={handleJerseyTouchStart}
+                    onTouchEnd={handleJerseyTouchEnd}
+                  >
+                    {TEAMS.map((entry, i) => {
+                      const roleStyle = getRoleStyle(i);
+                      return (
+                        <div
+                          key={entry.name}
+                          className={`jersey-carousel__slide absolute left-1/2 origin-center${i === activeIndex ? " jersey-carousel__slide--active" : ""}`}
+                          style={{
+                            ...roleStyle,
+                            aspectRatio: "0.72 / 1",
+                            transition: "transform 650ms cubic-bezier(0.4,0,0.2,1), filter 650ms cubic-bezier(0.4,0,0.2,1), opacity 650ms cubic-bezier(0.4,0,0.2,1), left 650ms cubic-bezier(0.4,0,0.2,1)",
+                            willChange: "transform, filter, opacity"
+                          }}
+                        >
+                          <span className="jersey-carousel__shadow" aria-hidden="true" />
+                          <img
+                            src={entry.jersey}
+                            alt={`${entry.name} jersey`}
+                            className="relative z-[1] w-full h-full object-contain object-center select-none"
+                            draggable="false"
+                            onError={(e) => {
+                              if (e.currentTarget.src !== JERSEY_PLACEHOLDER) {
+                                e.currentTarget.src = JERSEY_PLACEHOLDER;
+                              }
+                            }}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="teams-slide__footer jersey-carousel__footer sm:max-w-[320px] text-left">
+                  <div className="flex items-center justify-between sm:block gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 mb-1 sm:mb-2">
+                        <span className="text-xl sm:text-2xl shrink-0">{fl(TEAMS[activeIndex].name)}</span>
+                        <h3 className="font-semibold uppercase tracking-widest text-sm sm:text-[22px] text-white leading-tight truncate">
+                          {TEAMS[activeIndex].team}
+                        </h3>
+                      </div>
+                      <p className="text-[10px] sm:text-xs text-white/70 leading-relaxed font-light mb-0 sm:mb-5">
+                        Group {TEAMS[activeIndex].group} · WC 2026
+                      </p>
+                    </div>
+                    <div className="hidden sm:flex items-center gap-3 shrink-0">
+                      <button
+                        className="w-16 h-16 rounded-full border-2 border-white flex items-center justify-center text-white hover:scale-105 hover:bg-white/10 transition-all active:scale-95"
+                        onClick={() => navigateTeams("prev")}
+                        aria-label="Previous team"
+                      >
+                        <ArrowLeft className="h-6 w-6" />
+                      </button>
+                      <button
+                        className="w-16 h-16 rounded-full border-2 border-white flex items-center justify-center text-white hover:scale-105 hover:bg-white/10 transition-all active:scale-95"
+                        onClick={() => navigateTeams("next")}
+                        aria-label="Next team"
+                      >
+                        <ArrowRight className="h-6 w-6" />
+                      </button>
+                    </div>
+                    <p className="sm:hidden text-[10px] text-white/45 uppercase tracking-widest shrink-0">
+                      Swipe to browse
+                    </p>
                   </div>
                 </div>
               </div>
-
-              {/* Discover sponsors link */}
-              <button 
-                className="hidden sm:flex absolute bottom-20 right-12 z-50 items-center gap-1 text-white hover:opacity-85 transition-opacity"
-                onClick={() => scrollToSlide(3)}
-              >
-                <span className="font-heading uppercase font-normal tracking-tight leading-none text-4xl" style={{ fontFamily: "'Anton', sans-serif" }}>
-                  DISCOVER SPONSORS
-                </span>
-                <ArrowRight className="h-6 w-6" />
-              </button>
-              <button 
-                className="sm:hidden absolute top-20 right-4 z-50 flex items-center gap-1 text-white/80 hover:text-white text-[10px] font-bold uppercase tracking-widest transition-colors"
-                onClick={() => scrollToSlide(3)}
-              >
-                Sponsors <ArrowRight className="h-3 w-3" />
-              </button>
             </div>
 
             {/* SLIDE 4: Sponsors */}
             <div className="scroll-section scroll-section--over-video scroll-section--sponsors">
-              <div className="sponsors-slide__inner relative z-10 px-6 max-w-4xl text-center pt-20 sm:pt-28 md:pt-32 w-full flex flex-col items-center justify-start pb-12 mx-auto">
+              <div className="sponsors-slide__inner relative z-10 px-6 max-w-4xl text-center w-full flex flex-col items-center justify-center gap-4 mx-auto">
                 <h2 className="font-heading italic text-white text-5xl md:text-7xl lg:text-[5.5rem] leading-[0.9] tracking-[-3px] uppercase mb-3 sm:mb-4">
                   PROUD SPONSORS
                 </h2>
@@ -1171,27 +1318,24 @@ export default function App() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 w-full max-w-xl mx-auto">
                   {SPONSORS.map((sp) => (
-                    <div key={sp.label} className="liquid-glass rounded-[1.25rem] p-4 sm:p-6 text-center border border-white/5 flex flex-col items-center gap-3 sm:gap-4">
-                      {/* Image Logo Placeholder/Container */}
-                      <div className="w-full h-24 sm:h-32 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center p-3 sm:p-4 relative overflow-hidden group">
-                        <div className="absolute inset-0 bg-gradient-to-tr from-white/0 to-white/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-                        <img 
-                          src={sp.logo} 
-                          alt={`${sp.name} logo`} 
-                          className="h-full max-h-16 sm:max-h-24 object-contain filter brightness-100 contrast-100 transition-transform duration-300 group-hover:scale-105 select-none"
-                          draggable="false"
-                        />
-                      </div>
-                      
-                      {/* Badge */}
-                      <div className="bg-white/5 px-4 py-1.5 rounded-full text-white font-bold tracking-widest text-[11px] uppercase inline-block">
-                        {sp.label}
-                      </div>
-                      
-                      {/* Name & Description */}
-                      <div className="flex flex-col gap-1">
-                        <h4 className="text-sm font-semibold text-white/95 leading-tight">{sp.name}</h4>
-                        <p className="text-[11px] text-white/45">{sp.desc}</p>
+                    <div key={sp.label} className="liquid-glass rounded-[1.25rem] p-4 sm:p-5 text-center border border-white/5">
+                      <div className="frozen-inner rounded-xl p-4 sm:p-5 flex flex-col items-center gap-3 sm:gap-4 h-full">
+                        <div className="w-full h-24 sm:h-32 rounded-xl frozen-inner flex items-center justify-center p-3 sm:p-4 relative overflow-hidden group">
+                          <div className="absolute inset-0 bg-gradient-to-tr from-white/0 to-white/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+                          <img
+                            src={sp.logo}
+                            alt={`${sp.name} logo`}
+                            className="h-full max-h-16 sm:max-h-24 object-contain filter brightness-100 contrast-100 transition-transform duration-300 group-hover:scale-105 select-none"
+                            draggable="false"
+                          />
+                        </div>
+                        <div className="frozen-tag px-4 py-1.5 rounded-full text-white font-bold tracking-widest text-[11px] uppercase inline-block">
+                          {sp.label}
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <h4 className="text-sm font-semibold text-white/95 leading-tight">{sp.name}</h4>
+                          <p className="text-[11px] text-white/45">{sp.desc}</p>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -1205,12 +1349,12 @@ export default function App() {
 
             {/* SLIDE 5: Signup or Login page (Google Sign-In) */}
             <div className="scroll-section scroll-section--over-video scroll-section--dimmed">
-              <div className="relative z-10 px-4 w-full h-full flex flex-col items-center justify-between pt-16 sm:pt-20 pb-5">
-                <div className="flex-1 flex items-center justify-center w-full min-h-0">
+              <div className="scroll-slide-inner px-4 w-full justify-between">
+                <div className="flex-1 flex items-center justify-center w-full min-h-0 py-4">
                   <div className="liquid-glass-strong p-8 w-full max-w-md rounded-[1.25rem] border border-white/10 shadow-2xl flex flex-col items-center">
 
                     <div className="text-center mb-8">
-                      <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center mx-auto mb-4 border border-white/10">
+                      <div className="frozen-inner w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4">
                         <Award className="h-7 w-7 text-white" />
                       </div>
                       <h3 className="font-heading italic text-white text-3xl tracking-tight uppercase">SECURE SIGN IN</h3>
@@ -1228,7 +1372,7 @@ export default function App() {
                       </div>
                     )}
 
-                    <div className="bg-white/5 border border-white/10 rounded-xl p-3.5 text-left text-[11px] text-white/60 leading-relaxed w-full mt-4">
+                    <div className="frozen-inner rounded-xl p-3.5 text-left text-[11px] text-white/60 leading-relaxed w-full mt-4">
                       🛡️ <strong>Secure &amp; Private:</strong> Google Sign-In ensures only you can access your predictions — no passwords stored.
                     </div>
 
@@ -1361,11 +1505,10 @@ export default function App() {
                       {STUDY_YEARS.map(y => (
                         <button
                           key={y}
-                          className={`py-2.5 rounded-xl text-xs font-bold uppercase border transition-all ${
-                            registerYear === y
-                              ? "bg-white text-black border-white"
-                              : "bg-white/5 border-white/10 text-white/60 hover:text-white hover:border-white/30"
-                          }`}
+                          className={`py-2.5 rounded-xl text-xs font-bold uppercase border transition-all ${registerYear === y
+                            ? "bg-white text-black border-white"
+                            : "bg-white/5 border-white/10 text-white/60 hover:text-white hover:border-white/30"
+                            }`}
                           onClick={() => setRegisterYear(y)}
                         >
                           {y.replace(" Year", "")}
@@ -1401,25 +1544,25 @@ export default function App() {
           ─────────────────────────────────────────────────────────────────────── */}
       {currentUser && (page === "home" || page === "leaderboard" || page === "admin") && (
         <div className="max-w-3xl mx-auto px-4 pb-24 min-h-screen pt-4 relative z-10">
-          
+
           {/* Header Panel */}
           <header className="liquid-glass p-4 rounded-[1.25rem] flex items-center justify-between border border-white/10 mb-6 sticky top-4 z-40">
             <div className="flex items-center gap-2 select-none">
               <span className="text-xl">🏆</span>
               <span className="font-heading italic text-xl tracking-tight text-white uppercase font-bold">PREDIZONE</span>
             </div>
-            
+
             <div className="flex items-center gap-1.5">
               {!isAdmin && (
                 <>
-                  <button 
-                    className={`px-4 py-1.5 text-xs font-semibold uppercase tracking-wider rounded-lg transition-colors ${page==="home"?"bg-white text-black":"text-white/70 hover:text-white"}`}
+                  <button
+                    className={`px-4 py-1.5 text-xs font-semibold uppercase tracking-wider rounded-lg transition-colors ${page === "home" ? "bg-white text-black" : "text-white/70 hover:text-white"}`}
                     onClick={() => setPage("home")}
                   >
                     Fixtures
                   </button>
-                  <button 
-                    className={`px-4 py-1.5 text-xs font-semibold uppercase tracking-wider rounded-lg transition-colors ${page==="leaderboard"?"bg-white text-black":"text-white/70 hover:text-white"}`}
+                  <button
+                    className={`px-4 py-1.5 text-xs font-semibold uppercase tracking-wider rounded-lg transition-colors ${page === "leaderboard" ? "bg-white text-black" : "text-white/70 hover:text-white"}`}
                     onClick={() => setPage("leaderboard")}
                   >
                     Standings
@@ -1451,7 +1594,7 @@ export default function App() {
               </div>
               <div className="text-right">
                 <span className="text-[10px] text-white/50 uppercase tracking-widest block mb-0.5">Your Points</span>
-                <span className="font-heading italic text-2xl text-white tracking-tight">{leaderboard.find(l=>l.id===currentUser.id)?.points||0} PTS</span>
+                <span className="font-heading italic text-2xl text-white tracking-tight">{leaderboard.find(l => l.id === currentUser.id)?.points || 0} PTS</span>
               </div>
             </div>
           )}
@@ -1481,13 +1624,13 @@ export default function App() {
                   const key = `${currentUser.id}_${fix.id}`;
                   const myPred = predictions[key];
                   const res = results[fix.id];
-                  const pts = myPred && res ? calcPoints(myPred, res) : null;
+                  const pts = myPred && res ? calcPoints(myPred, res, fix) : null;
 
                   return (
                     <div key={fix.id} className="liquid-glass p-5 rounded-[1.25rem] border border-white/5 flex flex-col text-left">
                       <div className="flex justify-between items-center mb-4">
                         <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest">{fix.isKnockout ? fix.round : `Group ${fix.group}`}</span>
-                        <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${status==="open"?"bg-green-950 text-green-400 border border-green-800":"bg-amber-950/80 text-amber-400 border border-amber-900"}`}>
+                        <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${status === "open" ? "bg-green-950 text-green-400 border border-green-800" : "bg-amber-950/80 text-amber-400 border border-amber-900"}`}>
                           {status}
                         </span>
                       </div>
@@ -1507,14 +1650,13 @@ export default function App() {
                       <p className="text-[10px] text-white/40 text-center mb-4 leading-none">{formatDate(fix.date)} &nbsp;•&nbsp; {fix.venue}</p>
 
                       {res && (
-                        <div className="bg-white/5 border border-white/5 rounded-xl p-3 flex justify-between items-center text-xs mb-3">
+                        <div className="frozen-inner rounded-xl p-3 flex justify-between items-center text-xs mb-3">
                           <div>
                             <span className="text-white/50">Result: </span>
-                            <span className="font-semibold text-white">{fl(res.winner)} {res.winner}</span>
-                            <span className="text-white/40"> ({res.goals} combined goals)</span>
+                            <span className="font-semibold text-white">{formatResultSummary(res, fix)}</span>
                           </div>
                           {pts !== null && (
-                            <span className={`font-semibold px-2 py-0.5 rounded-full text-[10px] ${pts > 0 ? "bg-green-950 text-green-400":"bg-white/5 text-white/40"}`}>
+                            <span className={`font-semibold px-2 py-0.5 rounded-full text-[10px] ${pts > 0 ? "bg-green-950 text-green-400" : "frozen-tag text-white/40"}`}>
                               {pts > 0 ? `+${pts} PTS` : "0 PTS"}
                             </span>
                           )}
@@ -1522,18 +1664,17 @@ export default function App() {
                       )}
 
                       {myPred && (
-                        <div className="bg-white/5 border border-white/5 rounded-xl p-3 text-xs flex items-center justify-between">
+                        <div className="frozen-inner rounded-xl p-3 text-xs flex items-center justify-between">
                           <div>
-                            <span className="text-white/50">Your choice: </span>
-                            <span className="font-semibold text-white">{fl(myPred.winner)} {myPred.winner}</span>
-                            <span className="text-white/40"> ({myPred.goals} predicted)</span>
+                            <span className="text-white/50">Your prediction: </span>
+                            <span className="font-semibold text-white">{formatPredictionSummary(myPred, fix)}</span>
                           </div>
                           <span className="text-[10px] text-white/40 font-bold uppercase tracking-wider flex items-center gap-1">🔒 Locked</span>
                         </div>
                       )}
 
                       {status === "open" && !myPred && (
-                        <button className="btn-primary w-full py-2.5 rounded-xl text-xs mt-3 uppercase tracking-wider font-semibold" onClick={() => { setPredFixture(fix); setPredWinner(""); setPredGoals(""); }}>
+                        <button className="btn-primary w-full py-2.5 rounded-xl text-xs mt-3 uppercase tracking-wider font-semibold" onClick={() => { setPredFixture(fix); setPredWinner(""); setPredHomeGoals(""); setPredAwayGoals(""); }}>
                           Submit prediction
                         </button>
                       )}
@@ -1556,7 +1697,7 @@ export default function App() {
                 {leaderboard.map((u, i) => {
                   const isMe = u.id === currentUser.id;
                   return (
-                    <div 
+                    <div
                       key={u.id}
                       className={`liquid-glass p-4 rounded-xl flex items-center gap-4 ${isMe ? "border border-white/20 bg-white/5" : "border border-white/5"}`}
                     >
@@ -1594,9 +1735,9 @@ export default function App() {
 
               <div className="flex gap-1.5 p-1 rounded-xl bg-white/5 border border-white/5 mb-6">
                 {["results", "matches", "leaderboard", "participants"].map((tab) => (
-                  <button 
+                  <button
                     key={tab}
-                    className={`flex-1 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider transition-colors ${adminTab === tab ? "bg-white text-black":"text-white/60 hover:text-white"}`}
+                    className={`flex-1 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider transition-colors ${adminTab === tab ? "bg-white text-black" : "text-white/60 hover:text-white"}`}
                     onClick={() => setAdminTab(tab)}
                   >
                     {tab}
@@ -1609,9 +1750,9 @@ export default function App() {
                 <div className="space-y-4">
                   <div className="flex gap-1.5 overflow-x-auto pb-2 no-scrollbar">
                     {groups.map(g => (
-                      <button 
-                        key={g} 
-                        className={`px-4 py-1.5 text-xs font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${adminGroup === g ? "bg-white text-black":"bg-white/5 text-white/60 hover:text-white"}`}
+                      <button
+                        key={g}
+                        className={`px-4 py-1.5 text-xs font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${adminGroup === g ? "bg-white text-black" : "bg-white/5 text-white/60 hover:text-white"}`}
                         onClick={() => setAdminGroup(g)}
                       >
                         Group {g}
@@ -1627,12 +1768,12 @@ export default function App() {
                           <h4 className="text-sm font-semibold text-white">{fl(fix.home)} {fix.home} vs {fix.away} {fl(fix.away)}</h4>
                           <p className="text-[10px] text-white/40 mt-1">{formatDate(fix.date)}</p>
                           {res && (
-                            <div className="text-xs font-semibold text-white/80 mt-2">
-                              Result: {fl(res.winner)} {res.winner} ({res.goals} goals)
+                            <div className="frozen-inner rounded-lg px-3 py-2 text-xs font-semibold text-white/80 mt-2 inline-block">
+                              Result: {formatResultSummary(res, fix)}
                             </div>
                           )}
                         </div>
-                        <button className="btn-secondary px-4 py-1.5 rounded-lg text-xs font-semibold" onClick={() => { setSelFixture(fix); setResWinner(res?.winner || ""); setResGoals(res?.goals !== undefined ? String(res.goals) : ""); }}>
+                        <button className="btn-secondary px-4 py-1.5 rounded-lg text-xs font-semibold" onClick={() => { setSelFixture(fix); setResHomeGoals(res?.homeGoals !== undefined ? String(res.homeGoals) : ""); setResAwayGoals(res?.awayGoals !== undefined ? String(res.awayGoals) : ""); }}>
                           {res ? "Edit" : "Result"}
                         </button>
                       </div>
@@ -1657,7 +1798,7 @@ export default function App() {
                               <h4 className="text-sm font-semibold text-white mt-3">{fl(fix.home)} {fix.home} vs {fix.away} {fl(fix.away)}</h4>
                               <p className="text-[10px] text-white/45 mt-1">{formatDate(fix.date)} &nbsp;•&nbsp; {fix.venue}</p>
                               {res && (
-                                <p className="text-xs font-bold text-white/80 mt-2">Result: {fl(res.winner)} {res.winner} ({res.goals} goals)</p>
+                                <p className="frozen-inner rounded-lg px-3 py-2 text-xs font-bold text-white/80 mt-2 inline-block">Result: {formatResultSummary(res, fix)}</p>
                               )}
                             </div>
                             <div className="flex gap-2">
@@ -1719,12 +1860,12 @@ export default function App() {
           ─────────────────────────────────────────────────────────────────────── */}
       {/* Participant Score Predictions Modal */}
       {predFixture && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={e=>e.target===e.currentTarget&&setPredFixture(null)}>
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={e => e.target === e.currentTarget && setPredFixture(null)}>
           <div className="liquid-glass p-6 w-full max-w-sm rounded-[1.25rem] border border-white/10 shadow-2xl relative text-left">
             <h3 className="font-heading italic text-2xl text-white tracking-tight uppercase">Lock Prediction</h3>
             <p className="text-[10px] text-white/50 uppercase tracking-widest mt-1 mb-6">{formatDate(predFixture.date)} • {predFixture.venue}</p>
 
-            <div className="bg-white/5 border border-white/5 rounded-xl p-4 flex items-center justify-around mb-6">
+            <div className="frozen-inner rounded-xl p-4 flex items-center justify-around mb-6">
               <div className="text-center">
                 <span className="text-4xl block">{fl(predFixture.home)}</span>
                 <span className="text-xs font-semibold text-white/80 mt-1 block">{predFixture.home}</span>
@@ -1737,12 +1878,12 @@ export default function App() {
             </div>
 
             <div className="mb-5">
-              <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-2">Select winner</label>
+              <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-2">Select winner (optional)</label>
               <div className="flex gap-2">
                 {[predFixture.home, "Draw", predFixture.away].map(opt => (
-                  <button 
+                  <button
                     key={opt}
-                    className={`flex-1 py-3.5 rounded-xl text-[10px] font-bold uppercase tracking-wider border transition-all ${predWinner===opt?"bg-white text-black border-white":"bg-white/5 border-white/10 text-white/60 hover:text-white"}`}
+                    className={`flex-1 py-3.5 rounded-xl text-[10px] font-bold uppercase tracking-wider border transition-all ${predWinner === opt ? "bg-white text-black border-white" : "frozen-inner text-white/60 hover:text-white"}`}
                     onClick={() => setPredWinner(opt)}
                   >
                     <div className="text-lg mb-1 leading-none">{fl(opt)}</div>
@@ -1753,25 +1894,44 @@ export default function App() {
             </div>
 
             <div className="mb-6">
-              <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-2">Total score goals</label>
-              <input 
-                className="input-glass w-full px-4 py-3 rounded-xl text-center text-lg font-semibold"
-                type="number"
-                min="0"
-                placeholder="e.g. 3"
-                value={predGoals}
-                onChange={e=>setPredGoals(e.target.value)}
-              />
-              <p className="text-[10px] text-white/40 mt-1.5 leading-snug">Combined goals scored by both teams (e.g., 2-1 wins = 3 total goals).</p>
+              <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-2">Exact scoreline (optional)</label>
+              <div className="frozen-inner rounded-xl p-4 flex items-center gap-3">
+                <div className="flex-1 text-center">
+                  <p className="text-[9px] text-white/45 uppercase tracking-wider mb-2 truncate">{predFixture.home}</p>
+                  <input
+                    className="input-glass w-full px-3 py-3 rounded-xl text-center text-lg font-semibold"
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={predHomeGoals}
+                    onChange={e => setPredHomeGoals(e.target.value)}
+                  />
+                </div>
+                <span className="text-sm font-bold text-white/25 pt-5">–</span>
+                <div className="flex-1 text-center">
+                  <p className="text-[9px] text-white/45 uppercase tracking-wider mb-2 truncate">{predFixture.away}</p>
+                  <input
+                    className="input-glass w-full px-3 py-3 rounded-xl text-center text-lg font-semibold"
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={predAwayGoals}
+                    onChange={e => setPredAwayGoals(e.target.value)}
+                  />
+                </div>
+              </div>
+              <p className="text-[10px] text-white/40 mt-1.5 leading-snug">
+                Enter scores in home–away order. Example: 3–2 means {predFixture.home} 3, {predFixture.away} 2.
+              </p>
             </div>
 
-            <div className="bg-white/5 border border-white/5 rounded-xl p-3.5 text-[11px] text-white/50 leading-relaxed mb-6">
-              Once submitted, predicting inputs are <strong className="text-white">locked and cannot be modified</strong>.
+            <div className="frozen-inner rounded-xl p-3.5 text-[11px] text-white/50 leading-relaxed mb-6">
+              Predict the winner, the exact scoreline, or both. Once submitted, your prediction is <strong className="text-white">locked and cannot be modified</strong>.
             </div>
 
             <div className="flex gap-3">
               <button className="btn-primary flex-1 py-3 rounded-full text-xs uppercase tracking-widest font-bold" onClick={handleSavePrediction}>Lock Score</button>
-              <button className="btn-secondary px-6 py-3 rounded-full text-xs font-semibold" onClick={()=>setPredFixture(null)}>Cancel</button>
+              <button className="btn-secondary px-6 py-3 rounded-full text-xs font-semibold" onClick={() => setPredFixture(null)}>Cancel</button>
             </div>
           </div>
         </div>
@@ -1779,42 +1939,43 @@ export default function App() {
 
       {/* Admin Score Result submission Modal */}
       {selFixture && isAdmin && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={e=>e.target===e.currentTarget&&setSelFixture(null)}>
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={e => e.target === e.currentTarget && setSelFixture(null)}>
           <div className="liquid-glass p-6 w-full max-w-sm rounded-[1.25rem] border border-white/15 shadow-2xl relative text-left">
             <h3 className="font-heading italic text-2xl text-white tracking-tight uppercase mb-2 text-amber-500">Record Match Score</h3>
             <p className="text-sm font-semibold text-white/90 mb-6">{fl(selFixture.home)} {selFixture.home} vs {selFixture.away} {fl(selFixture.away)}</p>
 
-            <div className="mb-5">
-              <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-2">Winning selection</label>
-              <div className="flex gap-2">
-                {[selFixture.home, "Draw", selFixture.away].map(opt => (
-                  <button 
-                    key={opt}
-                    className={`flex-1 py-3 rounded-xl text-[10px] font-bold uppercase border transition-all ${resWinner===opt?"bg-white text-black border-white":"bg-white/5 border-white/10 text-white/60 hover:text-white"}`}
-                    onClick={() => setResWinner(opt)}
-                  >
-                    <div className="text-lg mb-1 leading-none">{fl(opt)}</div>
-                    {opt}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             <div className="mb-6">
-              <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-2">Total combined goals</label>
-              <input 
-                className="input-glass w-full px-4 py-3 rounded-xl text-center text-lg font-semibold"
-                type="number"
-                min="0"
-                placeholder="e.g. 2"
-                value={resGoals}
-                onChange={e=>setResGoals(e.target.value)}
-              />
+              <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-2">Final scoreline</label>
+              <div className="frozen-inner rounded-xl p-4 flex items-center gap-3">
+                <div className="flex-1 text-center">
+                  <p className="text-[9px] text-white/45 uppercase tracking-wider mb-2 truncate">{selFixture.home}</p>
+                  <input
+                    className="input-glass w-full px-3 py-3 rounded-xl text-center text-lg font-semibold"
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={resHomeGoals}
+                    onChange={e => setResHomeGoals(e.target.value)}
+                  />
+                </div>
+                <span className="text-sm font-bold text-white/25 pt-5">–</span>
+                <div className="flex-1 text-center">
+                  <p className="text-[9px] text-white/45 uppercase tracking-wider mb-2 truncate">{selFixture.away}</p>
+                  <input
+                    className="input-glass w-full px-3 py-3 rounded-xl text-center text-lg font-semibold"
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={resAwayGoals}
+                    onChange={e => setResAwayGoals(e.target.value)}
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="flex gap-3">
               <button className="btn-primary flex-1 py-3 rounded-full text-xs uppercase tracking-widest font-bold" onClick={handleSaveResult}>Save Score</button>
-              <button className="btn-secondary px-6 py-3 rounded-full text-xs font-semibold" onClick={()=>setSelFixture(null)}>Cancel</button>
+              <button className="btn-secondary px-6 py-3 rounded-full text-xs font-semibold" onClick={() => setSelFixture(null)}>Cancel</button>
             </div>
           </div>
         </div>
@@ -1822,7 +1983,7 @@ export default function App() {
 
       {/* Admin Add/Edit Knockout Match Modal */}
       {showAddMatch && isAdmin && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={e=>e.target===e.currentTarget&&setShowAddMatch(false)}>
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={e => e.target === e.currentTarget && setShowAddMatch(false)}>
           <div className="liquid-glass p-6 w-full max-w-md rounded-[1.25rem] border border-white/15 shadow-2xl relative text-left">
             <h3 className="font-heading italic text-2xl text-white tracking-tight uppercase mb-4 text-amber-500">
               {editingMatch ? "Edit Knockout Match" : "Add Knockout Match"}
@@ -1832,9 +1993,9 @@ export default function App() {
               <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-2">Knockout Round</label>
               <div className="flex gap-1.5 flex-wrap">
                 {ROUNDS.map(r => (
-                  <button 
+                  <button
                     key={r}
-                    className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase border transition-all ${newRound===r?"bg-white text-black border-white":"bg-white/5 border-white/10 text-white/60 hover:text-white"}`}
+                    className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase border transition-all ${newRound === r ? "bg-white text-black border-white" : "bg-white/5 border-white/10 text-white/60 hover:text-white"}`}
                     onClick={() => setNewRound(r)}
                   >
                     {r}
@@ -1846,36 +2007,36 @@ export default function App() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center mb-5">
               <div>
                 <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Home Team</label>
-                <input className="input-glass w-full px-3 py-2 rounded-lg text-xs" placeholder="e.g. Argentina" value={newHome} onChange={e=>setNewHome(e.target.value)} style={{width:"100%",padding:10,borderRadius:8,fontSize:13}} />
+                <input className="input-glass w-full px-3 py-2 rounded-lg text-xs" placeholder="e.g. Argentina" value={newHome} onChange={e => setNewHome(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 8, fontSize: 13 }} />
               </div>
               <span className="text-center text-[10px] font-bold text-white/20 mt-4 hidden md:inline">VS</span>
               <div>
                 <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Away Team</label>
-                <input className="input-glass w-full px-3 py-2 rounded-lg text-xs" placeholder="e.g. France" value={newAway} onChange={e=>setNewAway(e.target.value)} style={{width:"100%",padding:10,borderRadius:8,fontSize:13}} />
+                <input className="input-glass w-full px-3 py-2 rounded-lg text-xs" placeholder="e.g. France" value={newAway} onChange={e => setNewAway(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 8, fontSize: 13 }} />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4 mb-5">
               <div>
                 <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Match Date</label>
-                <input className="input-glass w-full px-3 py-2 rounded-lg text-xs" type="date" value={newDate} onChange={e=>setNewDate(e.target.value)} style={{width:"100%",padding:10,borderRadius:8,fontSize:13}} />
+                <input className="input-glass w-full px-3 py-2 rounded-lg text-xs" type="date" value={newDate} onChange={e => setNewDate(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 8, fontSize: 13 }} />
               </div>
               <div>
                 <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Kick-off Time</label>
-                <input className="input-glass w-full px-3 py-2 rounded-lg text-xs" type="time" value={newTime} onChange={e=>setNewTime(e.target.value)} style={{width:"100%",padding:10,borderRadius:8,fontSize:13}} />
+                <input className="input-glass w-full px-3 py-2 rounded-lg text-xs" type="time" value={newTime} onChange={e => setNewTime(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 8, fontSize: 13 }} />
               </div>
             </div>
 
             <div className="mb-6">
               <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Venue</label>
-              <input className="input-glass w-full px-3 py-2 rounded-lg text-xs" placeholder="e.g. MetLife Stadium, New York" value={newVenue} onChange={e=>setNewVenue(e.target.value)} style={{width:"100%",padding:10,borderRadius:8,fontSize:13}} />
+              <input className="input-glass w-full px-3 py-2 rounded-lg text-xs" placeholder="e.g. MetLife Stadium, New York" value={newVenue} onChange={e => setNewVenue(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 8, fontSize: 13 }} />
             </div>
 
             <div className="flex gap-3">
               <button className="btn-primary flex-1 py-3 rounded-full text-xs uppercase tracking-widest font-bold" onClick={handleSaveMatch}>
                 {editingMatch ? "Update Match" : "Create Match"}
               </button>
-              <button className="btn-secondary px-6 py-3 rounded-full text-xs font-semibold" onClick={()=>setShowAddMatch(false)}>Cancel</button>
+              <button className="btn-secondary px-6 py-3 rounded-full text-xs font-semibold" onClick={() => setShowAddMatch(false)}>Cancel</button>
             </div>
           </div>
         </div>

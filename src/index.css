@@ -7,6 +7,8 @@
   --font-serif: 'Instrument Serif', serif;
   --font-sans: 'Barlow', sans-serif;
   --font-anton: 'Anton', sans-serif;
+  --splash-safe-top: max(6rem, calc(env(safe-area-inset-top, 0px) + 4.75rem));
+  --splash-safe-bottom: max(3.25rem, calc(env(safe-area-inset-bottom, 0px) + 2.25rem));
 }
 
 body {
@@ -15,6 +17,7 @@ body {
   font-family: var(--font-sans);
   overflow: hidden;
   height: 100vh;
+  height: 100dvh;
   width: 100vw;
 }
 
@@ -23,6 +26,7 @@ body {
   scroll-snap-type: y mandatory;
   overflow-y: scroll;
   height: 100vh;
+  height: 100dvh;
   width: 100vw;
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
@@ -41,7 +45,10 @@ body {
 .scroll-section {
   scroll-snap-align: start;
   scroll-snap-stop: always;
+  min-height: 100vh;
+  min-height: 100dvh;
   height: 100vh;
+  height: 100dvh;
   width: 100%;
   position: relative;
   overflow: hidden;
@@ -49,6 +56,21 @@ body {
   flex-direction: column;
   justify-content: center;
   align-items: center;
+  box-sizing: border-box;
+  padding-top: var(--splash-safe-top);
+  padding-bottom: var(--splash-safe-bottom);
+}
+
+.scroll-slide-inner {
+  position: relative;
+  z-index: 10;
+  flex: 1;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
 }
 
 .scroll-section--over-video {
@@ -68,32 +90,74 @@ body {
   background: rgba(0, 0, 0, 0.55);
 }
 
-/* Predict & Win slide — scrollable on mobile when cards overflow */
-.scroll-section--predict {
+/* Hero slide — scrollable when how-it-works cards overflow */
+.scroll-section--hero {
   align-items: stretch;
+  overflow-y: auto;
+  justify-content: flex-start;
+  -webkit-overflow-scrolling: touch;
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
-@media (max-width: 767px) {
-  .scroll-section--predict {
-    overflow-y: auto;
-    justify-content: flex-start;
-    -webkit-overflow-scrolling: touch;
-  }
+.scroll-section--hero .scroll-slide-inner {
+  justify-content: flex-start;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding-top: var(--splash-safe-top);
+  padding-bottom: var(--splash-safe-bottom);
+  box-sizing: border-box;
+}
 
-  .predict-slide__inner {
-    min-height: min-content;
-    padding-bottom: 2.5rem;
+@media (min-width: 640px) and (min-height: 640px) {
+  .scroll-section--hero .scroll-slide-inner {
+    justify-content: center;
+  }
+}
+
+/* Scrollable slides — full-viewport inner scroll with safe padding */
+.scroll-section--predict,
+.scroll-section--sponsors {
+  align-items: stretch;
+  overflow-y: auto;
+  justify-content: flex-start;
+  -webkit-overflow-scrolling: touch;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.predict-slide__inner,
+.sponsors-slide__inner {
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding-top: var(--splash-safe-top);
+  padding-bottom: var(--splash-safe-bottom);
+  box-sizing: border-box;
+}
+
+.predict-slide__inner {
+  justify-content: flex-start;
+}
+
+.sponsors-slide__inner {
+  justify-content: center;
+}
+
+@media (max-height: 740px) {
+  .sponsors-slide__inner {
+    justify-content: flex-start;
   }
 }
 
 /* Liquid-glass rules */
 .liquid-glass {
-  background: rgba(255,255,255,0.01);
-  background-blend-mode: luminosity;
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  border: none;
-  box-shadow: inset 0 1px 1px rgba(255,255,255,0.1);
+  background: rgba(16, 16, 16, 0.58);
+  backdrop-filter: blur(22px) saturate(1.15);
+  -webkit-backdrop-filter: blur(22px) saturate(1.15);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
   position: relative;
   overflow: hidden;
 }
@@ -118,12 +182,13 @@ body {
 }
 
 .liquid-glass-strong {
-  background: rgba(255,255,255,0.01);
-  background-blend-mode: luminosity;
-  backdrop-filter: blur(50px);
-  -webkit-backdrop-filter: blur(50px);
-  border: none;
-  box-shadow: 4px 4px 4px rgba(0,0,0,0.05), inset 0 1px 1px rgba(255,255,255,0.15);
+  background: rgba(10, 10, 10, 0.68);
+  backdrop-filter: blur(32px) saturate(1.2);
+  -webkit-backdrop-filter: blur(32px) saturate(1.2);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
   position: relative;
   overflow: hidden;
 }
@@ -145,6 +210,52 @@ body {
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   pointer-events: none;
+}
+
+/* Frosted inner surface — opaque frozen panels inside cards */
+.frozen-inner {
+  background: rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(18px) saturate(1.15);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+  position: relative;
+  overflow: hidden;
+}
+
+.frozen-inner::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.1) 0%,
+    rgba(255, 255, 255, 0.02) 45%,
+    rgba(255, 255, 255, 0) 55%,
+    rgba(255, 255, 255, 0.06) 100%
+  );
+  pointer-events: none;
+}
+
+.frozen-inner > * {
+  position: relative;
+  z-index: 1;
+}
+
+.frozen-tag {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+/* Team jersey carousel — swipeable on touch devices */
+.jersey-carousel--swipeable {
+  touch-action: pan-y pinch-zoom;
 }
 
 /* Fixed splash video — stays behind all scrollable slides */
@@ -202,8 +313,10 @@ body {
 
 /* Input glass — always visible text, dark on light bg */
 .input-glass {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   color: #ffffff;
   outline: none;
   transition: border-color 0.2s, background 0.2s;
@@ -295,7 +408,7 @@ body {
     width: 100%;
     height: 100%;
     object-fit: contain;
-    object-position: bottom center;
+    object-position: center center;
   }
 
   .jersey-carousel__shadow {
@@ -315,21 +428,85 @@ body {
   }
 }
 
-/* Sponsors slide — scrollable on mobile when cards overflow */
-.scroll-section--sponsors {
-  align-items: stretch;
+/* Team jersey slide — flex shell keeps header/footer inside safe area */
+.scroll-section--teams {
+  padding: 0;
+  justify-content: stretch;
 }
 
-@media (max-width: 767px) {
-  .scroll-section--sponsors {
-    overflow-y: auto;
-    justify-content: flex-start;
-    -webkit-overflow-scrolling: touch;
+.teams-slide__shell {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 100dvh;
+  box-sizing: border-box;
+  padding-top: var(--splash-safe-top);
+  padding-bottom: var(--splash-safe-bottom);
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+.teams-slide__header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 1.5rem;
+}
+
+.teams-slide__stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow: visible;
+}
+
+.teams-slide__stage .contenders-bg {
+  top: 50%;
+  transform: translateY(-58%);
+}
+
+.teams-slide__stage .jersey-carousel {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.jersey-carousel__slide {
+  margin-top: 0;
+}
+
+.teams-slide__footer {
+  flex-shrink: 0;
+  padding-top: 0.75rem;
+  padding-bottom: 1.5rem;
+}
+
+@media (max-width: 639px) {
+  .teams-slide__footer {
+    padding-bottom: 2.5rem;
+  }
+}
+
+@media (min-width: 640px) {
+  .teams-slide__shell {
+    padding-left: 3rem;
+    padding-right: 3rem;
   }
 
-  .sponsors-slide__inner {
-    min-height: min-content;
-    padding-bottom: 3.5rem;
+  .teams-slide__stage .contenders-bg {
+    transform: translateY(-62%);
+  }
+
+  .teams-slide__footer {
+    padding-bottom: 0;
   }
 }
 
