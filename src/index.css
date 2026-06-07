@@ -129,8 +129,8 @@ body {
 
 .predict-slide__inner,
 .sponsors-slide__inner {
-  min-height: 110vh;
-  min-height: 110dvh;
+  min-height: 115vh;
+  min-height: 115dvh;
   padding-top: var(--splash-safe-top);
   padding-bottom: var(--splash-safe-bottom);
   box-sizing: border-box;
