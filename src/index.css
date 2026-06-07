@@ -213,21 +213,22 @@ body {
   pointer-events: none;
 }
 
-/* Frosted inner surface — opaque frozen panels inside cards */
+/* Frosted inner surface — pure CSS glass, no backdrop-filter (works everywhere) */
 .frozen-inner {
-  background: rgba(255, 255, 255, 0.07);
-  backdrop-filter: blur(18px) saturate(1.15);
-  -webkit-backdrop-filter: blur(18px) saturate(1.15);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.11) 0%,
+      rgba(255, 255, 255, 0.04) 50%,
+      rgba(255, 255, 255, 0.08) 100%
+    );
+  border: 1px solid rgba(255, 255, 255, 0.14);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.14),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.12),
+    0 4px 16px rgba(0, 0, 0, 0.25);
   position: relative;
   overflow: hidden;
-  /* Force a new compositing layer so backdrop-filter always works in deployed/CDN environments */
-  isolation: isolate;
-  transform: translateZ(0);
-  -webkit-transform: translateZ(0);
 }
 
 .frozen-inner::before {
@@ -235,25 +236,32 @@ body {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: linear-gradient(145deg,
-      rgba(255, 255, 255, 0.1) 0%,
-      rgba(255, 255, 255, 0.02) 45%,
-      rgba(255, 255, 255, 0) 55%,
-      rgba(255, 255, 255, 0.06) 100%);
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.14) 0%,
+    rgba(255, 255, 255, 0.02) 40%,
+    rgba(255, 255, 255, 0.00) 60%,
+    rgba(255, 255, 255, 0.07) 100%
+  );
   pointer-events: none;
+  z-index: 0;
 }
 
-.frozen-inner>* {
+.frozen-inner > * {
   position: relative;
   z-index: 1;
 }
 
 .frozen-tag {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.14) 0%,
+    rgba(255, 255, 255, 0.06) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.10);
 }
 
 /* Team jersey carousel — swipeable on touch devices */
