@@ -72,8 +72,9 @@ const FLAGS = {
 };
 const fl = t => FLAGS[t] || "🌍";
 
-// Hero background video — add your own clip at public/hero-bg.mp4
-const HERO_VIDEO_SRC = "/hero-bg.mp4";
+// Hero background video — hosted on Cloudinary CDN for Vercel streaming compatibility
+// ⚠️  Paste your Cloudinary video URL below (see README or Cloudinary Media Library)
+const HERO_VIDEO_SRC = "https://res.cloudinary.com/dl0yhguyp/video/upload/q_auto/f_auto/v1780865223/hero-bg_nfckfc.mp4";
 const HERO_VIDEO_FALLBACK = "https://media.roboflow.com/inference/soccer.mp4";
 
 // Creator footer links — update when ready
@@ -1070,8 +1071,8 @@ export default function App() {
 
                 {/* Football tournament badge */}
                 <motion.div
-                  initial={{ filter: "blur(10px)", opacity: 0, y: 20 }}
-                  animate={{ filter: "blur(0px)", opacity: 1, y: 0 }}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.6, ease: "easeOut", delay: 0.4 }}
                   className="lg:mt-24 py-2 px-3 sm:py-1.5 sm:pl-1.5 sm:pr-4 rounded-full inline-flex items-center justify-center gap-2 sm:gap-3 text-xs mt-0 md:mt-0 mb-6 max-w-full mx-auto bg-red-950/40 border border-red-500/30 backdrop-blur-md shadow-lg flex-nowrap whitespace-nowrap"
                 >
@@ -1088,8 +1089,8 @@ export default function App() {
                 />
 
                 <motion.p
-                  initial={{ filter: "blur(10px)", opacity: 0, y: 20 }}
-                  animate={{ filter: "blur(0px)", opacity: 1, y: 0 }}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.6, ease: "easeOut", delay: 0.8 }}
                   className="mt-6 text-sm md:text-base text-white/80 max-w-xl mx-auto font-light leading-relaxed"
                 >
@@ -1098,8 +1099,8 @@ export default function App() {
 
                 {/* CTA trigger */}
                 <motion.div
-                  initial={{ filter: "blur(10px)", opacity: 0, y: 20 }}
-                  animate={{ filter: "blur(0px)", opacity: 1, y: 0 }}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.6, ease: "easeOut", delay: 1.1 }}
                   className="flex items-center justify-center gap-6 mt-8"
                 >
@@ -1113,8 +1114,8 @@ export default function App() {
 
                 {/* How it works */}
                 <motion.div
-                  initial={{ filter: "blur(10px)", opacity: 0, y: 20 }}
-                  animate={{ filter: "blur(0px)", opacity: 1, y: 0 }}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.6, ease: "easeOut", delay: 1.3 }}
                   className="mt-8 sm:mt-12 w-full max-w-3xl"
                 >

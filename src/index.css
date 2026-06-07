@@ -224,6 +224,10 @@ body {
     inset 0 -1px 0 rgba(255, 255, 255, 0.05);
   position: relative;
   overflow: hidden;
+  /* Force a new compositing layer so backdrop-filter always works in deployed/CDN environments */
+  isolation: isolate;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
 }
 
 .frozen-inner::before {
