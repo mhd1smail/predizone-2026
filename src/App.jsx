@@ -1752,7 +1752,7 @@ export default function App() {
               </div>
             )}
 
-            <footer className="pb-24 mt-auto text-center pb-4 shrink-0">
+            <footer className="mb-24 mt-auto text-center pb-4 shrink-0">
               {!isAdmin && userTab === "you" ? (
                 <>
                   <p className="text-[10px] text-white/20 tracking-wide mb-2">say hi to me</p>
