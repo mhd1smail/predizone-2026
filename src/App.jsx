@@ -989,7 +989,7 @@ export default function App() {
       )}
 
       {currentUser && !needsProfile && (
-        <div className="pb-6 max-w-3xl mx-auto px-4 h-screen flex flex-col pt-4 relative z-10 no-scrollbar">
+        <div className="max-w-3xl mx-auto px-4 h-screen flex flex-col pt-4 relative z-10 no-scrollbar">
           <header className="liquid-glass rounded-[1.25rem] border border-white/10 mb-6 shrink-0">
             <div className="flex items-center justify-between p-4">
               <div className="flex items-center gap-2 select-none">
@@ -1752,7 +1752,7 @@ export default function App() {
               </div>
             )}
 
-            <footer className="pb-12 mt-auto text-center pb-4 shrink-0">
+            <footer className="pb-24 mt-auto text-center pb-4 shrink-0">
               {!isAdmin && userTab === "you" ? (
                 <>
                   <p className="text-[10px] text-white/20 tracking-wide mb-2">say hi to me</p>
@@ -1772,7 +1772,7 @@ export default function App() {
                   </div>
                 </>
               ) : (
-                <div className="pb-20 flex items-center justify-center gap-6 pt-2">
+                <div className="pb-20 flex items-center justify-center gap-6 pt-16">
                   {SPONSORS.map(sp => (
                     <img key={sp.label} src={sp.logo} alt={sp.name} className="h-8 sm:h-10 object-contain opacity-30 hover:opacity-60 transition-opacity rounded-2xl" />
                   ))}
