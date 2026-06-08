@@ -1032,7 +1032,7 @@ export default function App() {
             </div>
           </header>
           <audio ref={audioRef} src={BG_MUSIC_SRC} loop />
-          <div className="flex-1 overflow-y-auto no-scrollbar flex flex-col pb-4">
+          <div className="pb-12 flex-1 overflow-y-auto no-scrollbar flex flex-col pb-4">
 
             {!isAdmin && (
               <div className="liquid-glass px-5 py-6 sm:px-6 sm:py-8 rounded-[1.25rem] border border-white/5 mb-6 min-h-[100px] md:min-h-[110px]">
