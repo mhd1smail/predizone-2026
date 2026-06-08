@@ -989,7 +989,7 @@ export default function App() {
       )}
 
       {currentUser && !needsProfile && (
-        <div className="pb-6 max-w-3xl mx-auto px-4 h-screen flex flex-col pt-4 relative z-10 no-scrollbar">
+        <div className="pb-12 max-w-3xl mx-auto px-4 h-screen flex flex-col pt-4 relative z-10 no-scrollbar">
           <header className="liquid-glass rounded-[1.25rem] border border-white/10 mb-6 shrink-0">
             <div className="flex items-center justify-between p-4">
               <div className="flex items-center gap-2 select-none">
@@ -1032,7 +1032,7 @@ export default function App() {
             </div>
           </header>
           <audio ref={audioRef} src={BG_MUSIC_SRC} loop />
-          <div className="pb-12 flex-1 overflow-y-auto no-scrollbar flex flex-col pb-4">
+          <div className="pb-8 flex-1 overflow-y-auto no-scrollbar flex flex-col pb-4">
 
             {!isAdmin && (
               <div className="liquid-glass px-5 py-6 sm:px-6 sm:py-8 rounded-[1.25rem] border border-white/5 mb-6 min-h-[100px] md:min-h-[110px]">
