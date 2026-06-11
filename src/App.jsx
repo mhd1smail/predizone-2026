@@ -315,6 +315,17 @@ function buildLeaderboard(users, predictions, results, knockoutFixtures, fixture
   }).sort((a, b) => b.points - a.points);
 }
 
+function getFixturePredictionStats(fixtureId, allPreds) {
+  const fixturePreds = Object.values(allPreds).filter(p => String(p.fixtureId) === String(fixtureId) && p.winner);
+  const total = fixturePreds.length;
+  if (total === 0) return null;
+  const counts = {};
+  fixturePreds.forEach(p => { counts[p.winner] = (counts[p.winner] || 0) + 1; });
+  const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  const bars = entries.map(([team, count]) => ({ team, count, pct: Math.round((count / total) * 100) }));
+  return { total, bars };
+}
+
 function getUserStats(uid, preds, res, fixtures) {
   const userPreds = Object.values(preds).filter(p => p.uid === uid);
   const scored = userPreds.filter(p => res[p.fixtureId]);
@@ -638,15 +649,17 @@ export default function App() {
     if (diff > total / 2) diff -= total;
     if (diff < -total / 2) diff += total;
     if (diff === 0) {
-      return { top: "50%", transform: "translate(-50%, -50%) scale(1)", filter: "brightness(1)", zIndex: 20, opacity: 1, width: isMobile ? "min(68vw, 300px)" : "clamp(200px, 38vw, 420px)", height: isMobile ? "min(42vh, 360px)" : "auto" };
+      return { display: "block", top: "50%", transform: "translate(-50%, -50%) scale(1)", filter: "brightness(1)", zIndex: 20, opacity: 1, width: isMobile ? "min(68vw, 300px)" : "clamp(200px, 38vw, 420px)", height: isMobile ? "min(42vh, 360px)" : "auto" };
     } else if (Math.abs(diff) === 1) {
       const side = diff > 0 ? 1 : -1;
       const offset = isMobile ? 34 : 45;
-      return { top: "50%", transform: `translate(calc(-50% + ${side * offset}%), -50%) scale(${isMobile ? 0.82 : 0.78})`, filter: "brightness(0.72)", zIndex: 10, opacity: 0.85, width: isMobile ? "min(52vw, 230px)" : "clamp(160px, 30vw, 340px)", height: isMobile ? "min(34vh, 300px)" : "auto" };
-    } else {
+      return { display: "block", top: "50%", transform: `translate(calc(-50% + ${side * offset}%), -50%) scale(${isMobile ? 0.82 : 0.78})`, filter: "brightness(0.72)", zIndex: 10, opacity: 0.85, width: isMobile ? "min(52vw, 230px)" : "clamp(160px, 30vw, 340px)", height: isMobile ? "min(34vh, 300px)" : "auto" };
+    } else if (Math.abs(diff) === 2) {
       const side = diff > 0 ? 1 : -1;
       const offset = isMobile ? 68 : 80;
-      return { top: "50%", transform: `translate(calc(-50% + ${side * offset}%), -50%) scale(0.55)`, filter: "brightness(0.45)", zIndex: 1, opacity: 0, width: isMobile ? "min(38vw, 170px)" : "clamp(120px, 22vw, 260px)", height: isMobile ? "min(24vh, 220px)" : "auto" };
+      return { display: "block", top: "50%", transform: `translate(calc(-50% + ${side * offset}%), -50%) scale(0.55)`, filter: "brightness(0.45)", zIndex: 1, opacity: 0, width: isMobile ? "min(38vw, 170px)" : "clamp(120px, 22vw, 260px)", height: isMobile ? "min(24vh, 220px)" : "auto" };
+    } else {
+      return { display: "none" };
     }
   };
 
@@ -896,18 +909,21 @@ export default function App() {
                   <div className="jersey-carousel jersey-carousel--swipeable z-[3]" onTouchStart={handleJerseyTouchStart} onTouchEnd={handleJerseyTouchEnd}>
                     {TEAMS.map((entry, i) => {
                       const roleStyle = getRoleStyle(i);
+                      const isNear = Math.abs(((i - activeIndex + TEAMS.length) % TEAMS.length)) <= 2 ||
+                                     Math.abs(((i - activeIndex + TEAMS.length) % TEAMS.length) - TEAMS.length) <= 2;
                       return (
                         <div key={entry.name}
                           className={`jersey-carousel__slide absolute left-1/2 origin-center${i === activeIndex ? " jersey-carousel__slide--active" : ""}`}
                           style={{
                             ...roleStyle, aspectRatio: "0.72 / 1",
-                            transition: "transform 650ms cubic-bezier(0.4,0,0.2,1), filter 650ms cubic-bezier(0.4,0,0.2,1), opacity 650ms cubic-bezier(0.4,0,0.2,1), left 650ms cubic-bezier(0.4,0,0.2,1)",
-                            willChange: "transform, filter, opacity"
+                            transition: roleStyle.display !== "none" ? "transform 650ms cubic-bezier(0.4,0,0.2,1), opacity 650ms cubic-bezier(0.4,0,0.2,1)" : "none",
+                            willChange: roleStyle.display !== "none" ? "transform, opacity" : "auto"
                           }}>
                           <span className="jersey-carousel__shadow" aria-hidden="true" />
                           <img src={entry.jersey} alt={`${entry.name} jersey`}
                             className="relative z-[1] w-full h-full object-contain object-center select-none"
                             draggable="false"
+                            loading={isNear ? "eager" : "lazy"}
                             onError={(e) => { if (e.currentTarget.src !== JERSEY_PLACEHOLDER) e.currentTarget.src = JERSEY_PLACEHOLDER; }} />
                         </div>
                       );
@@ -1196,19 +1212,112 @@ export default function App() {
                       </div>
                       <p className="text-[10px] text-white/40 mb-5">{formatDate(fix.date)} &nbsp;•&nbsp; {fix.venue}</p>
 
-                      {res && (
-                        <div className="frozen-inner rounded-xl p-4 flex justify-between items-center text-sm mb-4 max-w-xs mx-auto">
-                          <div>
-                            <span className="text-white/50 text-xs">Result: </span>
-                            <span className="font-semibold text-white">{formatResultSummary(res, fix)}</span>
+                      {res ? (
+                        <div className="relative frozen-inner rounded-xl p-4 max-w-xs mx-auto">
+                          <div className="flex items-center justify-center gap-6 mb-2">
+                            <div className={`text-center relative ${res.winner === fix.home ? "scale-110" : "opacity-60"}`}>
+                              <span className="text-4xl block mb-1">{fl(fix.home)}</span>
+                              <span className="text-[10px] font-semibold text-white/90 block">{fix.home}</span>
+                              {res.winner === fix.home && (
+                                <>
+                                  {[...Array(6)].map((_, i) => (
+                                    <div key={i} className="confetti-piece" style={{
+                                      left: `${20 + i * 12}%`, top: `${i % 2 === 0 ? 10 : 40}%`,
+                                      background: `hsl(${i * 60}, 80%, 60%)`,
+                                      animationDelay: `${i * 0.12}s`,
+                                    }} />
+                                  ))}
+                                </>
+                              )}
+                            </div>
+                            <div className="text-center font-heading italic text-2xl text-white">
+                              {res.homeGoals ?? "?"}–{res.awayGoals ?? "?"}
+                            </div>
+                            <div className={`text-center relative ${res.winner === fix.away ? "scale-110" : "opacity-60"}`}>
+                              <span className="text-4xl block mb-1">{fl(fix.away)}</span>
+                              <span className="text-[10px] font-semibold text-white/90 block">{fix.away}</span>
+                              {res.winner === fix.away && (
+                                <>
+                                  {[...Array(6)].map((_, i) => (
+                                    <div key={i} className="confetti-piece" style={{
+                                      left: `${20 + i * 12}%`, top: `${i % 2 === 0 ? 10 : 40}%`,
+                                      background: `hsl(${i * 60 + 30}, 80%, 60%)`,
+                                      animationDelay: `${i * 0.12}s`,
+                                    }} />
+                                  ))}
+                                </>
+                              )}
+                            </div>
                           </div>
                           {pts !== null && (
-                            <span className={`font-semibold px-3 py-1 rounded-full text-xs ${pts > 0 ? "bg-green-950 text-green-400" : "frozen-tag text-white/40"}`}>{pts > 0 ? `+${pts} PTS` : "0 PTS"}</span>
+                            <div className="text-center mb-2">
+                              <span className={`font-semibold px-3 py-1 rounded-full text-xs ${pts > 0 ? "bg-green-950 text-green-400" : "frozen-tag text-white/40"}`}>{pts > 0 ? `+${pts} PTS` : "0 PTS"}</span>
+                            </div>
+                          )}
+                          {(() => {
+                            const stats = getFixturePredictionStats(fix.id, predictions);
+                            if (!stats || stats.bars.length === 0) return null;
+                            return (
+                              <div className="mt-3 pt-3 border-t border-white/10">
+                                <p className="text-[9px] text-white/40 uppercase tracking-wider text-center mb-2">Prediction Distribution</p>
+                                <div className="space-y-1.5">
+                                  {stats.bars.map(bar => (
+                                    <div key={bar.team} className="flex items-center gap-2">
+                                      <span className="text-[8px] text-white/50 w-10 text-right leading-tight truncate shrink-0">{bar.team === fix.home ? fix.home : bar.team === fix.away ? fix.away : "Draw"}</span>
+                                      <div className="flex-1 h-4 rounded-full bg-white/5 overflow-hidden">
+                                        <div className="h-full rounded-full transition-all duration-500" style={{
+                                          width: `${bar.pct}%`,
+                                          background: bar.team === fix.home ? "#22c55e" : bar.team === fix.away ? "#3b82f6" : "#a855f7",
+                                        }} />
+                                      </div>
+                                      <span className="text-[9px] font-bold text-white/70 w-8 text-left shrink-0">{bar.pct}%</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      ) : status === "played" ? (
+                        <div className="frozen-inner rounded-xl p-4 max-w-xs mx-auto">
+                          {(() => {
+                            const stats = getFixturePredictionStats(fix.id, predictions);
+                            if (!stats || stats.bars.length === 0) return <p className="text-[10px] text-white/40 text-center">No predictions yet</p>;
+                            return (
+                              <div>
+                                <p className="text-[9px] text-white/40 uppercase tracking-wider text-center mb-3">Prediction Distribution</p>
+                                <div className="space-y-1.5">
+                                  {stats.bars.map(bar => (
+                                    <div key={bar.team} className="flex items-center gap-2">
+                                      <span className="text-[8px] text-white/50 w-10 text-right leading-tight truncate shrink-0">{bar.team === fix.home ? fix.home : bar.team === fix.away ? fix.away : "Draw"}</span>
+                                      <div className="flex-1 h-4 rounded-full bg-white/5 overflow-hidden">
+                                        <div className="h-full rounded-full transition-all duration-500" style={{
+                                          width: `${bar.pct}%`,
+                                          background: bar.team === fix.home ? "#22c55e" : bar.team === fix.away ? "#3b82f6" : "#a855f7",
+                                        }} />
+                                      </div>
+                                      <span className="text-[9px] font-bold text-white/70 w-8 text-left shrink-0">{bar.pct}%</span>
+                                    </div>
+                                  ))}
+                                </div>
+                                <p className="text-[9px] text-white/30 text-center mt-2">{stats.total} total predictions</p>
+                              </div>
+                            );
+                          })()}
+                          {myPred ? (
+                            <div className="mt-3 pt-2 border-t border-white/10 text-center">
+                              <span className="text-[9px] text-white/50 uppercase tracking-wider">Your prediction: </span>
+                              <span className="text-[10px] font-semibold text-white">{formatPredictionSummary(myPred, fix)}</span>
+                            </div>
+                          ) : (
+                            <div className="mt-3 pt-2 border-t border-white/10 text-center">
+                              <span className="text-[9px] text-white/40 italic">You didn't predict this match</span>
+                            </div>
                           )}
                         </div>
-                      )}
+                      ) : null}
 
-                      {myPred && (
+                      {!res && status !== "played" && myPred && (
                         <div className="frozen-inner rounded-xl p-4 text-sm max-w-xs mx-auto">
                           <span className="text-white/50 text-xs">Your prediction: </span>
                           <span className="font-semibold text-white">{formatPredictionSummary(myPred, fix)}</span>
