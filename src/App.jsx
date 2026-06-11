@@ -421,7 +421,7 @@ export default function App() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [isMuted, setIsMuted] = useState(true);
+  const [isMuted, setIsMuted] = useState(false);
   const audioRef = useRef(null);
   const [adminTab, setAdminTab] = useState("results");
   const [adminGroup, setAdminGroup] = useState("A");
@@ -465,6 +465,16 @@ export default function App() {
   useEffect(() => {
     if (audioRef.current) audioRef.current.muted = isMuted;
   }, [isMuted]);
+
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el) return;
+    const play = () => { el.play().catch(() => {}); };
+    play();
+    const handler = () => { play(); document.removeEventListener("click", handler); };
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
+  }, []);
 
   useEffect(() => {
     [JERSEY_PLACEHOLDER, ...TEAMS.map((t) => t.jersey)].forEach((src) => { const i = new Image(); i.src = src; });
@@ -1141,7 +1151,7 @@ export default function App() {
               )}
             </div>
           </header>
-          <audio ref={audioRef} src={BG_MUSIC_SRC} loop />
+          <audio ref={audioRef} src={BG_MUSIC_SRC} loop autoPlay />
           <div className="pb-8 flex-1 overflow-y-auto no-scrollbar flex flex-col pb-4 pb-safe">
 
             {!isAdmin && (
