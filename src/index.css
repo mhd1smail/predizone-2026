@@ -23,14 +23,15 @@ body {
 
 /* Custom Scroll Snapping */
 .scroll-container {
-  scroll-snap-type: y mandatory;
   overflow-y: scroll;
   height: 100vh;
   height: 100dvh;
   width: 100vw;
   scroll-behavior: smooth;
+  scroll-snap-type: y proximity;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .scroll-container::-webkit-scrollbar {
@@ -44,8 +45,6 @@ body {
 }
 
 .scroll-section {
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
   min-height: 100vh;
   min-height: 100dvh;
   height: 100vh;
@@ -58,8 +57,21 @@ body {
   justify-content: center;
   align-items: center;
   box-sizing: border-box;
+  scroll-snap-align: start;
   padding-top: var(--splash-safe-top);
   padding-bottom: var(--splash-safe-bottom);
+}
+
+.scroll-section + .scroll-section::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 80px;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, transparent 100%);
+  pointer-events: none;
+  z-index: 5;
 }
 
 .scroll-slide-inner {
@@ -91,20 +103,20 @@ body {
   background: rgba(0, 0, 0, 0.55);
 }
 
-/* Hero slide — scrollable when how-it-works cards overflow */
+/* Hero — stretch, grows to fit content */
 .scroll-section--hero {
   align-items: stretch;
-  overflow-y: auto;
   justify-content: flex-start;
-  -webkit-overflow-scrolling: touch;
   padding-top: 0;
   padding-bottom: 0;
+  height: auto;
+  overflow: visible;
 }
 
 .scroll-section--hero .scroll-slide-inner {
   justify-content: flex-start;
-  min-height: 100vh;
-  min-height: 100dvh;
+  min-height: 110vh;
+  min-height: 110dvh;
   padding-top: var(--splash-safe-top);
   padding-bottom: var(--splash-safe-bottom);
   box-sizing: border-box;
@@ -116,15 +128,14 @@ body {
   }
 }
 
-/* Scrollable slides — full-viewport inner scroll with safe padding */
 .scroll-section--predict,
 .scroll-section--sponsors {
   align-items: stretch;
-  overflow-y: auto;
   justify-content: flex-start;
-  -webkit-overflow-scrolling: touch;
   padding-top: 0;
   padding-bottom: 0;
+  height: auto;
+  overflow: visible;
 }
 
 .predict-slide__inner,
@@ -230,6 +241,11 @@ body {
   background:
     linear-gradient(180deg, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.25) 40%, rgba(0, 0, 0, 0.65) 100%),
     radial-gradient(ellipse at center, transparent 0%, rgba(0, 0, 0, 0.35) 100%);
+}
+
+/* Safe-area bottom padding for dashboard */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 /* Ripple dots inside buttons */

@@ -4,69 +4,112 @@ import { motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, ArrowUpRight, Play, Award, LogOut, CheckCircle, User, Zap, Mail, Target, Lock, Unlock, Eye, Trophy, Calendar, Volume2, VolumeX } from "lucide-react";
 import { useAuth } from "./context/AuthContext";
 import { signInWithGoogle, signOutUser } from "./firebase/auth";
-import { createUserProfile, getUserProfile, onAllUsers, savePrediction, saveResult, deleteKnockoutMatch, saveKnockoutMatch, onAllPredictions, onAllResults, onKnockoutMatches, onArenaSettings, updateArenaSettings } from "./firebase/firestore";
+import { createUserProfile, getUserProfile, onAllUsers, savePrediction, saveResult, deleteKnockoutMatch, saveKnockoutMatch, onAllPredictions, onAllResults, onKnockoutMatches, onArenaSettings, updateArenaSettings, onFixtureOverrides, saveFixtureOverride, onUndoStatus, setUndoPoint, undoLastFixtureEdit } from "./firebase/firestore";
 
 const FIXTURES = [
-  { id: 1, group: "A", home: "Mexico", away: "Ecuador", date: "2026-06-11T20:00:00-05:00", venue: "SoFi Stadium, Los Angeles" },
-  { id: 2, group: "A", home: "USA", away: "Bolivia", date: "2026-06-12T17:00:00-05:00", venue: "MetLife Stadium, New York" },
-  { id: 3, group: "A", home: "Ecuador", away: "Bolivia", date: "2026-06-16T14:00:00-05:00", venue: "Levi's Stadium, San Francisco" },
-  { id: 4, group: "A", home: "USA", away: "Mexico", date: "2026-06-16T20:00:00-05:00", venue: "AT&T Stadium, Dallas" },
-  { id: 5, group: "A", home: "Bolivia", away: "USA", date: "2026-06-20T20:00:00-05:00", venue: "Rose Bowl, Los Angeles" },
-  { id: 6, group: "A", home: "Ecuador", away: "Mexico", date: "2026-06-20T20:00:00-05:00", venue: "Arrowhead Stadium, Kansas City" },
-  { id: 7, group: "B", home: "Argentina", away: "Morocco", date: "2026-06-13T17:00:00-05:00", venue: "MetLife Stadium, New York" },
-  { id: 8, group: "B", home: "Ukraine", away: "Iraq", date: "2026-06-13T20:00:00-05:00", venue: "AT&T Stadium, Dallas" },
-  { id: 9, group: "B", home: "Morocco", away: "Iraq", date: "2026-06-17T14:00:00-05:00", venue: "Arrowhead Stadium, Kansas City" },
-  { id: 10, group: "B", home: "Argentina", away: "Ukraine", date: "2026-06-17T20:00:00-05:00", venue: "Rose Bowl, Los Angeles" },
-  { id: 11, group: "B", home: "Iraq", away: "Argentina", date: "2026-06-21T16:00:00-05:00", venue: "SoFi Stadium, Los Angeles" },
-  { id: 12, group: "B", home: "Ukraine", away: "Morocco", date: "2026-06-21T16:00:00-05:00", venue: "Levi's Stadium, San Francisco" },
-  { id: 13, group: "C", home: "France", away: "Saudi Arabia", date: "2026-06-13T14:00:00-05:00", venue: "BC Place, Vancouver" },
-  { id: 14, group: "C", home: "Japan", away: "New Zealand", date: "2026-06-14T17:00:00-05:00", venue: "Estadio Akron, Guadalajara" },
-  { id: 15, group: "C", home: "Saudi Arabia", away: "New Zealand", date: "2026-06-18T14:00:00-05:00", venue: "BC Place, Vancouver" },
-  { id: 16, group: "C", home: "France", away: "Japan", date: "2026-06-18T20:00:00-05:00", venue: "AT&T Stadium, Dallas" },
-  { id: 17, group: "C", home: "New Zealand", away: "France", date: "2026-06-22T16:00:00-05:00", venue: "Estadio Akron, Guadalajara" },
-  { id: 18, group: "C", home: "Saudi Arabia", away: "Japan", date: "2026-06-22T16:00:00-05:00", venue: "MetLife Stadium, New York" },
-  { id: 19, group: "D", home: "Spain", away: "South Korea", date: "2026-06-14T14:00:00-05:00", venue: "Rose Bowl, Los Angeles" },
-  { id: 20, group: "D", home: "Germany", away: "Nigeria", date: "2026-06-14T20:00:00-05:00", venue: "AT&T Stadium, Dallas" },
-  { id: 21, group: "D", home: "South Korea", away: "Nigeria", date: "2026-06-18T17:00:00-05:00", venue: "SoFi Stadium, Los Angeles" },
-  { id: 22, group: "D", home: "Spain", away: "Germany", date: "2026-06-19T20:00:00-05:00", venue: "MetLife Stadium, New York" },
-  { id: 23, group: "D", home: "Nigeria", away: "Spain", date: "2026-06-23T16:00:00-05:00", venue: "Arrowhead Stadium, Kansas City" },
-  { id: 24, group: "D", home: "South Korea", away: "Germany", date: "2026-06-23T16:00:00-05:00", venue: "Levi's Stadium, San Francisco" },
-  { id: 25, group: "E", home: "Brazil", away: "Serbia", date: "2026-06-15T17:00:00-05:00", venue: "Estadio Azteca, Mexico City" },
-  { id: 26, group: "E", home: "England", away: "Australia", date: "2026-06-15T20:00:00-05:00", venue: "AT&T Stadium, Dallas" },
-  { id: 27, group: "E", home: "Serbia", away: "Australia", date: "2026-06-19T14:00:00-05:00", venue: "Rose Bowl, Los Angeles" },
-  { id: 28, group: "E", home: "Brazil", away: "England", date: "2026-06-19T17:00:00-05:00", venue: "SoFi Stadium, Los Angeles" },
-  { id: 29, group: "E", home: "Australia", away: "Brazil", date: "2026-06-23T20:00:00-05:00", venue: "MetLife Stadium, New York" },
-  { id: 30, group: "E", home: "England", away: "Serbia", date: "2026-06-23T20:00:00-05:00", venue: "BC Place, Vancouver" },
-  { id: 31, group: "F", home: "Portugal", away: "Cameroon", date: "2026-06-15T14:00:00-05:00", venue: "BC Place, Vancouver" },
-  { id: 32, group: "F", home: "Belgium", away: "Venezuela", date: "2026-06-16T17:00:00-05:00", venue: "Estadio Akron, Guadalajara" },
-  { id: 33, group: "F", home: "Cameroon", away: "Venezuela", date: "2026-06-20T14:00:00-05:00", venue: "Estadio Azteca, Mexico City" },
-  { id: 34, group: "F", home: "Portugal", away: "Belgium", date: "2026-06-20T17:00:00-05:00", venue: "Rose Bowl, Los Angeles" },
-  { id: 35, group: "F", home: "Venezuela", away: "Portugal", date: "2026-06-24T16:00:00-05:00", venue: "SoFi Stadium, Los Angeles" },
-  { id: 36, group: "F", home: "Cameroon", away: "Belgium", date: "2026-06-24T16:00:00-05:00", venue: "AT&T Stadium, Dallas" },
-  { id: 37, group: "G", home: "Netherlands", away: "Uruguay", date: "2026-06-16T14:00:00-05:00", venue: "Estadio Azteca, Mexico City" },
-  { id: 38, group: "G", home: "Colombia", away: "Senegal", date: "2026-06-17T17:00:00-05:00", venue: "BC Place, Vancouver" },
-  { id: 39, group: "G", home: "Uruguay", away: "Senegal", date: "2026-06-21T14:00:00-05:00", venue: "Estadio Akron, Guadalajara" },
-  { id: 40, group: "G", home: "Netherlands", away: "Colombia", date: "2026-06-21T20:00:00-05:00", venue: "MetLife Stadium, New York" },
-  { id: 41, group: "G", home: "Senegal", away: "Netherlands", date: "2026-06-25T16:00:00-05:00", venue: "Rose Bowl, Los Angeles" },
-  { id: 42, group: "G", home: "Uruguay", away: "Colombia", date: "2026-06-25T16:00:00-05:00", venue: "Estadio Azteca, Mexico City" },
-  { id: 43, group: "H", home: "Italy", away: "Ecuador", date: "2026-06-17T14:00:00-05:00", venue: "AT&T Stadium, Dallas" },
-  { id: 44, group: "H", home: "Croatia", away: "Iran", date: "2026-06-17T20:00:00-05:00", venue: "SoFi Stadium, Los Angeles" },
-  { id: 45, group: "H", home: "Ecuador", away: "Iran", date: "2026-06-21T17:00:00-05:00", venue: "MetLife Stadium, New York" },
-  { id: 46, group: "H", home: "Italy", away: "Croatia", date: "2026-06-22T20:00:00-05:00", venue: "BC Place, Vancouver" },
-  { id: 47, group: "H", home: "Iran", away: "Italy", date: "2026-06-26T16:00:00-05:00", venue: "Estadio Akron, Guadalajara" },
-  { id: 48, group: "H", home: "Croatia", away: "Ecuador", date: "2026-06-26T16:00:00-05:00", venue: "Arrowhead Stadium, Kansas City" },
+  // Group A
+  { id: 1, group: "A", home: "Mexico", away: "South Africa", date: "2026-06-11T19:00:00Z", venue: "Estadio Azteca, Mexico City" },
+  { id: 2, group: "A", home: "South Korea", away: "Czechia", date: "2026-06-12T02:00:00Z", venue: "Estadio Akron, Guadalajara" },
+  { id: 3, group: "A", home: "Czechia", away: "South Africa", date: "2026-06-18T16:00:00Z", venue: "Mercedes-Benz Stadium, Atlanta" },
+  { id: 4, group: "A", home: "Mexico", away: "South Korea", date: "2026-06-19T01:00:00Z", venue: "Estadio Akron, Guadalajara" },
+  { id: 5, group: "A", home: "Czechia", away: "Mexico", date: "2026-06-25T01:00:00Z", venue: "Estadio Azteca, Mexico City" },
+  { id: 6, group: "A", home: "South Africa", away: "South Korea", date: "2026-06-25T01:00:00Z", venue: "Estadio BBVA, Monterrey" },
+  // Group B
+  { id: 7, group: "B", home: "Canada", away: "Bosnia", date: "2026-06-12T19:00:00Z", venue: "BMO Field, Toronto" },
+  { id: 8, group: "B", home: "Qatar", away: "Switzerland", date: "2026-06-13T19:00:00Z", venue: "Levi's Stadium, Santa Clara" },
+  { id: 9, group: "B", home: "Switzerland", away: "Bosnia", date: "2026-06-18T19:00:00Z", venue: "SoFi Stadium, Inglewood" },
+  { id: 10, group: "B", home: "Canada", away: "Qatar", date: "2026-06-18T22:00:00Z", venue: "BC Place, Vancouver" },
+  { id: 11, group: "B", home: "Switzerland", away: "Canada", date: "2026-06-24T19:00:00Z", venue: "BC Place, Vancouver" },
+  { id: 12, group: "B", home: "Bosnia", away: "Qatar", date: "2026-06-24T19:00:00Z", venue: "Lumen Field, Seattle" },
+  // Group C
+  { id: 13, group: "C", home: "Brazil", away: "Morocco", date: "2026-06-13T22:00:00Z", venue: "MetLife Stadium, East Rutherford" },
+  { id: 14, group: "C", home: "Haiti", away: "Scotland", date: "2026-06-14T01:00:00Z", venue: "Gillette Stadium, Foxborough" },
+  { id: 15, group: "C", home: "Scotland", away: "Morocco", date: "2026-06-19T22:00:00Z", venue: "Gillette Stadium, Foxborough" },
+  { id: 16, group: "C", home: "Brazil", away: "Haiti", date: "2026-06-20T00:30:00Z", venue: "Lincoln Financial Field, Philadelphia" },
+  { id: 17, group: "C", home: "Scotland", away: "Brazil", date: "2026-06-24T22:00:00Z", venue: "Hard Rock Stadium, Miami Gardens" },
+  { id: 18, group: "C", home: "Morocco", away: "Haiti", date: "2026-06-24T22:00:00Z", venue: "Mercedes-Benz Stadium, Atlanta" },
+  // Group D
+  { id: 19, group: "D", home: "USA", away: "Paraguay", date: "2026-06-13T01:00:00Z", venue: "SoFi Stadium, Inglewood" },
+  { id: 20, group: "D", home: "Australia", away: "Türkiye", date: "2026-06-14T04:00:00Z", venue: "BC Place, Vancouver" },
+  { id: 21, group: "D", home: "USA", away: "Australia", date: "2026-06-19T19:00:00Z", venue: "Lumen Field, Seattle" },
+  { id: 22, group: "D", home: "Türkiye", away: "Paraguay", date: "2026-06-20T03:00:00Z", venue: "Levi's Stadium, Santa Clara" },
+  { id: 23, group: "D", home: "Türkiye", away: "USA", date: "2026-06-26T02:00:00Z", venue: "SoFi Stadium, Inglewood" },
+  { id: 24, group: "D", home: "Paraguay", away: "Australia", date: "2026-06-26T02:00:00Z", venue: "Levi's Stadium, Santa Clara" },
+  // Group E
+  { id: 25, group: "E", home: "Germany", away: "Curaçao", date: "2026-06-14T17:00:00Z", venue: "NRG Stadium, Houston" },
+  { id: 26, group: "E", home: "Ivory Coast", away: "Ecuador", date: "2026-06-14T23:00:00Z", venue: "Lincoln Financial Field, Philadelphia" },
+  { id: 27, group: "E", home: "Germany", away: "Ivory Coast", date: "2026-06-20T20:00:00Z", venue: "BMO Field, Toronto" },
+  { id: 28, group: "E", home: "Ecuador", away: "Curaçao", date: "2026-06-21T00:00:00Z", venue: "Arrowhead Stadium, Kansas City" },
+  { id: 29, group: "E", home: "Curaçao", away: "Ivory Coast", date: "2026-06-25T20:00:00Z", venue: "Lincoln Financial Field, Philadelphia" },
+  { id: 30, group: "E", home: "Ecuador", away: "Germany", date: "2026-06-25T20:00:00Z", venue: "MetLife Stadium, East Rutherford" },
+  // Group F
+  { id: 31, group: "F", home: "Netherlands", away: "Japan", date: "2026-06-14T20:00:00Z", venue: "AT&T Stadium, Arlington" },
+  { id: 32, group: "F", home: "Sweden", away: "Tunisia", date: "2026-06-15T02:00:00Z", venue: "Estadio BBVA, Monterrey" },
+  { id: 33, group: "F", home: "Netherlands", away: "Sweden", date: "2026-06-20T17:00:00Z", venue: "NRG Stadium, Houston" },
+  { id: 34, group: "F", home: "Tunisia", away: "Japan", date: "2026-06-21T04:00:00Z", venue: "Estadio BBVA, Monterrey" },
+  { id: 35, group: "F", home: "Japan", away: "Sweden", date: "2026-06-25T23:00:00Z", venue: "AT&T Stadium, Arlington" },
+  { id: 36, group: "F", home: "Tunisia", away: "Netherlands", date: "2026-06-25T23:00:00Z", venue: "Arrowhead Stadium, Kansas City" },
+  // Group G
+  { id: 37, group: "G", home: "Belgium", away: "Egypt", date: "2026-06-15T19:00:00Z", venue: "Lumen Field, Seattle" },
+  { id: 38, group: "G", home: "Iran", away: "New Zealand", date: "2026-06-16T01:00:00Z", venue: "SoFi Stadium, Inglewood" },
+  { id: 39, group: "G", home: "Belgium", away: "Iran", date: "2026-06-21T19:00:00Z", venue: "SoFi Stadium, Inglewood" },
+  { id: 40, group: "G", home: "New Zealand", away: "Egypt", date: "2026-06-22T01:00:00Z", venue: "BC Place, Vancouver" },
+  { id: 41, group: "G", home: "Egypt", away: "Iran", date: "2026-06-27T03:00:00Z", venue: "Lumen Field, Seattle" },
+  { id: 42, group: "G", home: "New Zealand", away: "Belgium", date: "2026-06-27T03:00:00Z", venue: "BC Place, Vancouver" },
+  // Group H
+  { id: 43, group: "H", home: "Spain", away: "Cape Verde", date: "2026-06-15T16:00:00Z", venue: "Mercedes-Benz Stadium, Atlanta" },
+  { id: 44, group: "H", home: "Saudi Arabia", away: "Uruguay", date: "2026-06-15T22:00:00Z", venue: "Hard Rock Stadium, Miami Gardens" },
+  { id: 45, group: "H", home: "Spain", away: "Saudi Arabia", date: "2026-06-21T16:00:00Z", venue: "Mercedes-Benz Stadium, Atlanta" },
+  { id: 46, group: "H", home: "Uruguay", away: "Cape Verde", date: "2026-06-21T22:00:00Z", venue: "Hard Rock Stadium, Miami Gardens" },
+  { id: 47, group: "H", home: "Cape Verde", away: "Saudi Arabia", date: "2026-06-27T00:00:00Z", venue: "NRG Stadium, Houston" },
+  { id: 48, group: "H", home: "Uruguay", away: "Spain", date: "2026-06-27T00:00:00Z", venue: "Estadio Akron, Guadalajara" },
+  // Group I
+  { id: 49, group: "I", home: "France", away: "Senegal", date: "2026-06-16T19:00:00Z", venue: "MetLife Stadium, East Rutherford" },
+  { id: 50, group: "I", home: "Iraq", away: "Norway", date: "2026-06-16T22:00:00Z", venue: "Gillette Stadium, Foxborough" },
+  { id: 51, group: "I", home: "France", away: "Iraq", date: "2026-06-22T21:00:00Z", venue: "Lincoln Financial Field, Philadelphia" },
+  { id: 52, group: "I", home: "Norway", away: "Senegal", date: "2026-06-23T00:00:00Z", venue: "MetLife Stadium, East Rutherford" },
+  { id: 53, group: "I", home: "Norway", away: "France", date: "2026-06-26T19:00:00Z", venue: "Gillette Stadium, Foxborough" },
+  { id: 54, group: "I", home: "Senegal", away: "Iraq", date: "2026-06-26T19:00:00Z", venue: "BMO Field, Toronto" },
+  // Group J
+  { id: 55, group: "J", home: "Argentina", away: "Algeria", date: "2026-06-17T01:00:00Z", venue: "Arrowhead Stadium, Kansas City" },
+  { id: 56, group: "J", home: "Austria", away: "Jordan", date: "2026-06-17T04:00:00Z", venue: "Levi's Stadium, Santa Clara" },
+  { id: 57, group: "J", home: "Argentina", away: "Austria", date: "2026-06-22T17:00:00Z", venue: "AT&T Stadium, Arlington" },
+  { id: 58, group: "J", home: "Jordan", away: "Algeria", date: "2026-06-23T03:00:00Z", venue: "Levi's Stadium, Santa Clara" },
+  { id: 59, group: "J", home: "Algeria", away: "Austria", date: "2026-06-28T02:00:00Z", venue: "Arrowhead Stadium, Kansas City" },
+  { id: 60, group: "J", home: "Jordan", away: "Argentina", date: "2026-06-28T02:00:00Z", venue: "AT&T Stadium, Arlington" },
+  // Group K
+  { id: 61, group: "K", home: "Portugal", away: "DR Congo", date: "2026-06-17T17:00:00Z", venue: "NRG Stadium, Houston" },
+  { id: 62, group: "K", home: "Uzbekistan", away: "Colombia", date: "2026-06-18T02:00:00Z", venue: "Estadio Azteca, Mexico City" },
+  { id: 63, group: "K", home: "Portugal", away: "Uzbekistan", date: "2026-06-23T17:00:00Z", venue: "NRG Stadium, Houston" },
+  { id: 64, group: "K", home: "Colombia", away: "DR Congo", date: "2026-06-24T02:00:00Z", venue: "Estadio Akron, Guadalajara" },
+  { id: 65, group: "K", home: "Colombia", away: "Portugal", date: "2026-06-27T23:30:00Z", venue: "Hard Rock Stadium, Miami Gardens" },
+  { id: 66, group: "K", home: "DR Congo", away: "Uzbekistan", date: "2026-06-27T23:30:00Z", venue: "Mercedes-Benz Stadium, Atlanta" },
+  // Group L
+  { id: 67, group: "L", home: "England", away: "Croatia", date: "2026-06-17T20:00:00Z", venue: "AT&T Stadium, Arlington" },
+  { id: 68, group: "L", home: "Ghana", away: "Panama", date: "2026-06-17T23:00:00Z", venue: "BMO Field, Toronto" },
+  { id: 69, group: "L", home: "England", away: "Ghana", date: "2026-06-23T20:00:00Z", venue: "Gillette Stadium, Foxborough" },
+  { id: 70, group: "L", home: "Panama", away: "Croatia", date: "2026-06-23T23:00:00Z", venue: "BMO Field, Toronto" },
+  { id: 71, group: "L", home: "Panama", away: "England", date: "2026-06-27T21:00:00Z", venue: "MetLife Stadium, East Rutherford" },
+  { id: 72, group: "L", home: "Croatia", away: "Ghana", date: "2026-06-27T21:00:00Z", venue: "Lincoln Financial Field, Philadelphia" },
 ];
 
 const ROUNDS = ["Round of 32", "Round of 16", "Quarterfinal", "Semifinal", "Third Place", "Final"];
 const STUDY_YEARS = ["2nd Year", "3rd Year", "PG 1st Year", "PG 2nd Year"];
 
 const FLAGS = {
-  "Mexico": "🇲🇽", "Ecuador": "🇪🇨", "USA": "🇺🇸", "Bolivia": "🇧🇴", "Argentina": "🇦🇷", "Morocco": "🇲🇦",
-  "Ukraine": "🇺🇦", "Iraq": "🇮🇶", "France": "🇫🇷", "Saudi Arabia": "🇸🇦", "Japan": "🇯🇵", "New Zealand": "🇳🇿",
-  "Spain": "🇪🇸", "South Korea": "🇰🇷", "Germany": "🇩🇪", "Nigeria": "🇳🇬", "Brazil": "🇧🇷", "Serbia": "🇷🇸",
-  "England": "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "Australia": "🇦🇺", "Portugal": "🇵🇹", "Cameroon": "🇨🇲", "Belgium": "🇧🇪",
-  "Venezuela": "🇻🇪", "Netherlands": "🇳🇱", "Uruguay": "🇺🇾", "Colombia": "🇨🇴", "Senegal": "🇸🇳",
-  "Italy": "🇮🇹", "Croatia": "🇭🇷", "Iran": "🇮🇷", "Draw": "🤝"
+  "Mexico": "🇲🇽", "South Africa": "🇿🇦", "South Korea": "🇰🇷", "Czechia": "🇨🇿",
+  "Canada": "🇨🇦", "Bosnia": "🇧🇦", "Qatar": "🇶🇦", "Switzerland": "🇨🇭",
+  "Brazil": "🇧🇷", "Morocco": "🇲🇦", "Haiti": "🇭🇹", "Scotland": "🏴󠁧󠁢󠁳󠁣󠁴󠁿",
+  "USA": "🇺🇸", "Paraguay": "🇵🇾", "Australia": "🇦🇺", "Türkiye": "🇹🇷",
+  "Germany": "🇩🇪", "Curaçao": "🇨🇼", "Ivory Coast": "🇨🇮", "Ecuador": "🇪🇨",
+  "Netherlands": "🇳🇱", "Japan": "🇯🇵", "Sweden": "🇸🇪", "Tunisia": "🇹🇳",
+  "Belgium": "🇧🇪", "Egypt": "🇪🇬", "Iran": "🇮🇷", "New Zealand": "🇳🇿",
+  "Spain": "🇪🇸", "Cape Verde": "🇨🇻", "Saudi Arabia": "🇸🇦", "Uruguay": "🇺🇾",
+  "France": "🇫🇷", "Senegal": "🇸🇳", "Iraq": "🇮🇶", "Norway": "🇳🇴",
+  "Argentina": "🇦🇷", "Algeria": "🇩🇿", "Austria": "🇦🇹", "Jordan": "🇯🇴",
+  "Portugal": "🇵🇹", "DR Congo": "🇨🇩", "Uzbekistan": "🇺🇿", "Colombia": "🇨🇴",
+  "England": "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "Croatia": "🇭🇷", "Ghana": "🇬🇭", "Panama": "🇵🇦",
+  "Draw": "🤝"
 };
 const fl = t => FLAGS[t] || "🌍";
 const HERO_VIDEO_SRC = "https://res.cloudinary.com/dl0yhguyp/video/upload/q_auto/f_auto/v1780865223/hero-bg_nfckfc.mp4";
@@ -110,13 +153,13 @@ const JERSEY_PLACEHOLDER = "/jerseys/argentina.png";
 const TEAM_BG_PALETTE = ["#F4845F", "#6BBF7A", "#E882B4", "#6EB5FF", "#C9A84C", "#9B7FD4", "#E85D5D", "#4ECDC4"];
 
 function teamJerseyPath(name) {
-  const slug = name.toLowerCase().replace(/\s+/g, "-");
+  const slug = name.toLowerCase().replace(/\s+/g, "-").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   return `/jerseys/${slug}.png`;
 }
 
 function buildTeamsFromFixtures() {
   const seen = new Map();
-  const groupOrder = ["A", "B", "C", "D", "E", "F", "G", "H"];
+  const groupOrder = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"];
   FIXTURES.forEach((f) => {
     if (!seen.has(f.home)) seen.set(f.home, f.group);
     if (!seen.has(f.away)) seen.set(f.away, f.group);
@@ -254,8 +297,13 @@ function formatResultSummary(res, fixture) {
   return parts.join(" · ");
 }
 
-function buildLeaderboard(users, predictions, results, knockoutFixtures) {
-  const allFixtures = [...FIXTURES, ...knockoutFixtures];
+function mergeFixtures(base, overrides) {
+  return base.map(f => overrides[f.id] ? { ...f, ...overrides[f.id] } : f);
+}
+
+function buildLeaderboard(users, predictions, results, knockoutFixtures, fixtureOverrides) {
+  const merged = mergeFixtures(FIXTURES, fixtureOverrides || {});
+  const allFixtures = [...merged, ...knockoutFixtures];
   return Object.values(users).map(u => {
     let pts = 0;
     allFixtures.forEach(fix => {
@@ -369,7 +417,7 @@ export default function App() {
   const [viewingParticipant, setViewingParticipant] = useState(null);
   const [registerName, setRegisterName] = useState("");
   const [registerDept, setRegisterDept] = useState("");
-  const [registerYear, setRegisterYear] = useState("1st Year");
+  const [registerYear, setRegisterYear] = useState("2nd Year");
   const [predFixture, setPredFixture] = useState(null);
   const [predWinner, setPredWinner] = useState("");
   const [predHomeGoals, setPredHomeGoals] = useState("");
@@ -379,6 +427,14 @@ export default function App() {
   const [resAwayGoals, setResAwayGoals] = useState("");
   const [showAddMatch, setShowAddMatch] = useState(false);
   const [editingMatch, setEditingMatch] = useState(null);
+  const [fixtureOverrides, setFixtureOverrides] = useState({});
+  const [undoInfo, setUndoInfo] = useState(null);
+  const [editFixture, setEditFixture] = useState(null);
+  const [editFixtureHome, setEditFixtureHome] = useState("");
+  const [editFixtureAway, setEditFixtureAway] = useState("");
+  const [editFixtureDate, setEditFixtureDate] = useState("");
+  const [editFixtureTime, setEditFixtureTime] = useState("");
+  const [editFixtureVenue, setEditFixtureVenue] = useState("");
   const [newRound, setNewRound] = useState("Round of 32");
   const [newHome, setNewHome] = useState("");
   const [newAway, setNewAway] = useState("");
@@ -425,7 +481,13 @@ export default function App() {
 
   useEffect(() => {
     const unsubArena = onArenaSettings((s) => setArenaSettings(s));
-    return () => unsubArena();
+    const unsubOverrides = onFixtureOverrides((o) => setFixtureOverrides(o));
+    return () => { unsubArena(); unsubOverrides(); };
+  }, []);
+
+  useEffect(() => {
+    const unsubUndo = onUndoStatus((info) => setUndoInfo(info));
+    return () => unsubUndo();
   }, []);
 
   useEffect(() => {
@@ -565,7 +627,9 @@ export default function App() {
 
   const scrollToSlide = (index) => {
     if (!containerRef.current) return;
-    containerRef.current.scrollTo({ top: index * containerRef.current.clientHeight, behavior: "smooth" });
+    const sections = containerRef.current.querySelectorAll(".scroll-section");
+    if (!sections[index]) return;
+    containerRef.current.scrollTo({ top: sections[index].offsetTop, behavior: "smooth" });
   };
 
   const getRoleStyle = (i) => {
@@ -648,17 +712,47 @@ export default function App() {
     showToast(editingMatch ? "Match updated!" : "Knockout match added!");
   };
 
-  const leaderboard = buildLeaderboard(users, predictions, results, knockoutFixtures);
-  const allFixtures = [...FIXTURES, ...knockoutFixtures];
+  const openEditFixture = (fix) => {
+    setEditFixture(fix);
+    setEditFixtureHome(fix.home);
+    setEditFixtureAway(fix.away);
+    const d = new Date(fix.date);
+    setEditFixtureDate(d.toISOString().split("T")[0]);
+    setEditFixtureTime(d.toTimeString().slice(0, 5));
+    setEditFixtureVenue(fix.venue);
+  };
+
+  const handleSaveFixtureEdit = async () => {
+    if (!editFixture) return;
+    if (!editFixtureDate || !editFixtureTime) { showToast("Enter date and time!", "error"); return; }
+    const prev = fixtureOverrides?.[editFixture.id] || null;
+    const override = {
+      date: `${editFixtureDate}T${editFixtureTime}:00`,
+      venue: editFixtureVenue.trim() || editFixture.venue,
+    };
+    if (editFixtureHome.trim()) override.home = editFixtureHome.trim();
+    if (editFixtureAway.trim()) override.away = editFixtureAway.trim();
+    await setUndoPoint(editFixture.id, prev);
+    await saveFixtureOverride(editFixture.id, override);
+    setEditFixture(null);
+    showToast("Fixture updated!");
+  };
+
+  const handleUndoFixtureEdit = async () => {
+    const result = await undoLastFixtureEdit();
+    if (result === "expired") { showToast("Undo window expired (1 hour)", "error"); }
+    else if (result === "undone") { showToast("Edit undone!"); }
+  };
+
+  const leaderboard = buildLeaderboard(users, predictions, results, knockoutFixtures, fixtureOverrides);
+  const allFixtures = [...mergeFixtures(FIXTURES, fixtureOverrides || {}), ...knockoutFixtures];
   const now = new Date();
   const sortedFixtures = [...allFixtures].sort((a, b) => new Date(a.date) - new Date(b.date));
   const todayFixtures = allFixtures.filter(f => isSameLocalDay(f.date));
   const futureFixtures = sortedFixtures.filter(f => new Date(f.date) > now);
   const upcomingFiltered = sortedFixtures;
-  const nextFixture = futureFixtures.length > 0 ? futureFixtures[0] : null;
-  const primaryFixture = todayFixtures.length > 0 ? todayFixtures[0] : nextFixture;
   const finishedFixtures = sortedFixtures.filter(f => new Date(f.date).getTime() - 1800000 <= now);
-  const groups = ["A", "B", "C", "D", "E", "F", "G", "H"];
+  const groups = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"];
   const isLockedGlobal = arenaSettings.arenaLocked;
 
   if (authLoading) return (
@@ -1010,19 +1104,19 @@ export default function App() {
             <div className="flex gap-1 px-3 pb-3 overflow-x-auto no-scrollbar">
               {!isAdmin ? (
                 <>
-                  <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "fixtures" ? "bg-white text-black" : "text-white/70 hover:text-white"}`} onClick={() => setUserTab("fixtures")}>
+                  <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "fixtures" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => setUserTab("fixtures")}>
                     <Target className="h-3 w-3 inline mr-1" />Predict
                   </button>
-                  <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "upcoming" ? "bg-white text-black" : "text-white/70 hover:text-white"}`} onClick={() => setUserTab("upcoming")}>
+                  <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "upcoming" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => setUserTab("upcoming")}>
                     <Calendar className="h-3 w-3 inline mr-1" />All
                   </button>
-                  <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "finished" ? "bg-white text-black" : "text-white/70 hover:text-white"}`} onClick={() => setUserTab("finished")}>
+                  <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "finished" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => setUserTab("finished")}>
                     <CheckCircle className="h-3 w-3 inline mr-1" />Finished
                   </button>
-                  <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "leaderboard" ? "bg-white text-black" : "text-white/70 hover:text-white"}`} onClick={() => setUserTab("leaderboard")}>
+                  <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "leaderboard" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => setUserTab("leaderboard")}>
                     <Trophy className="h-3 w-3 inline mr-1" />Standings
                   </button>
-                  <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "you" ? "bg-white text-black" : "text-white/70 hover:text-white"}`} onClick={() => setUserTab("you")}>
+                  <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "you" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => setUserTab("you")}>
                     <User className="h-3 w-3 inline mr-1" />You
                   </button>
                 </>
@@ -1032,12 +1126,12 @@ export default function App() {
             </div>
           </header>
           <audio ref={audioRef} src={BG_MUSIC_SRC} loop />
-          <div className="pb-8 flex-1 overflow-y-auto no-scrollbar flex flex-col pb-4">
+          <div className="pb-8 flex-1 overflow-y-auto no-scrollbar flex flex-col pb-4 pb-safe">
 
             {!isAdmin && (
-              <div className="liquid-glass px-5 py-6 sm:px-6 sm:py-8 rounded-[1.25rem] border border-white/5 mb-6 min-h-[100px] md:min-h-[110px]">
+              <div className="liquid-glass px-5 py-6 sm:px-6 sm:py-8 rounded-[1.25rem] border border-white/5 mb-6 min-h-[100px] md:min-h-[110px] overflow-hidden cursor-pointer" onClick={() => setUserTab("you")}>
                 <div className="flex flex-row items-center gap-3 sm:gap-0 sm:justify-between">
-                  <div className="flex items-center gap-3 text-left">
+                  <div className="flex items-center gap-3 text-left min-w-0 flex-shrink">
                     {currentUser.photoURL ? (
                       <img src={currentUser.photoURL} alt={currentUser.name} className="w-10 h-10 rounded-full border border-white/20 shrink-0" />
                     ) : (
@@ -1048,8 +1142,8 @@ export default function App() {
                       <span className="text-[10px] text-white/40 uppercase tracking-widest mt-0.5 block truncate">{currentUser.dept} • {currentUser.year || "1st Year"} • {currentUser.email}</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 sm:gap-4">
-                    {isLockedGlobal && <div className="bg-amber-950/60 border border-amber-800/50 px-3 py-1 rounded-full shrink-0"><Lock className="h-3 w-3 inline text-amber-400 mr-1" /><span className="text-amber-400 text-[10px] font-bold uppercase tracking-wider">Predictions Locked</span></div>}
+                  <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+                    {isLockedGlobal && <div className="bg-amber-950/60 border border-amber-800/50 px-3 py-1 rounded-full shrink-0"><Lock className="h-3 w-3 inline text-amber-400 mr-1" /><span className="text-amber-400 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">Predictions Locked</span></div>}
                     <div className="text-left sm:text-right shrink-0">
                       <span className="text-[10px] text-white/50 uppercase tracking-widest block mb-0.5">Your Points</span>
                       <span className="font-heading italic text-2xl text-white tracking-tight">{leaderboard.find(l => l.id === currentUser.id)?.points || 0} PTS</span>
@@ -1060,15 +1154,20 @@ export default function App() {
             )}
 
             {/* ─── USER: Fixtures / Predict ─── */}
-            {userTab === "fixtures" && !isAdmin && (
+            {userTab === "fixtures" && !isAdmin && (() => {
+              const dayFixtures = todayFixtures.length > 0 ? todayFixtures : (() => {
+                if (futureFixtures.length === 0) return [];
+                const nextDate = new Date(futureFixtures[0].date).toDateString();
+                return futureFixtures.filter(f => new Date(f.date).toDateString() === nextDate);
+              })();
+              return (
               <div className="space-y-4">
                 <div className="text-left mb-6">
-                  <h2 className="font-heading italic text-3xl uppercase tracking-tight text-white">{primaryFixture && isSameLocalDay(new Date(primaryFixture.date)) ? "TODAY'S MATCH" : "NEXT MATCH"}</h2>
-                  <p className="text-xs text-white/50 mt-1 uppercase tracking-wider">{primaryFixture ? formatDate(primaryFixture.date) : todayLabel()}</p>
+                  <h2 className="font-heading italic text-3xl uppercase tracking-tight text-white">{dayFixtures.length > 0 && isSameLocalDay(new Date(dayFixtures[0].date)) ? "TODAY'S MATCHES" : "NEXT MATCHES"}</h2>
+                  <p className="text-xs text-white/50 mt-1 uppercase tracking-wider">{dayFixtures.length > 0 ? formatDate(dayFixtures[0].date) : todayLabel()}</p>
                 </div>
 
-                {primaryFixture ? (() => {
-                  const fix = primaryFixture;
+                {dayFixtures.length > 0 ? dayFixtures.map(fix => {
                   const status = getStatus(fix, isLockedGlobal);
                   const key = `${currentUser.id}_${fix.id}`;
                   const myPred = predictions[key];
@@ -1130,7 +1229,7 @@ export default function App() {
                       )}
                     </div>
                   );
-                })() : (
+                }) : (
                   <div className="liquid-glass rounded-[1.5rem] p-12 text-center border border-white/5">
                     <span className="text-5xl mb-4 block">📅</span>
                     <h3 className="font-heading italic text-2xl text-white/70">No Matches Available</h3>
@@ -1139,7 +1238,8 @@ export default function App() {
                   </div>
                 )}
               </div>
-            )}
+              );
+            })()}
 
             {/* ─── USER: All Fixtures ─── */}
             {userTab === "upcoming" && !isAdmin && (
@@ -1407,13 +1507,18 @@ export default function App() {
                       {isLockedGlobal ? "Unlock Arena" : "Lock Arena"}
                     </button>
                     <button className="btn-secondary px-4 py-1.5 rounded-full text-[10px] font-semibold" onClick={() => openAddMatch()}>+ Add Match</button>
+                    {undoInfo && (
+                      <button className="btn-secondary px-3 py-1.5 rounded-full text-[10px] font-semibold border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10" onClick={handleUndoFixtureEdit}>
+                        ↩ Undo Edit
+                      </button>
+                    )}
                   </div>
                 </div>
 
                 <div className="flex gap-1 p-1 rounded-xl bg-white/5 border border-white/5 mb-6 overflow-x-auto no-scrollbar">
                   {["results", "matches", "custommatch", "winners", "upcoming", "finished", "leaderboard", "participants"].map((tab) => (
                     <button key={tab}
-                      className={`px-3 py-1.5 rounded-lg text-[9px] font-semibold uppercase tracking-wider whitespace-nowrap transition-colors ${adminTab === tab ? "bg-white text-black" : "text-white/60 hover:text-white"}`}
+                      className={`px-3 py-1.5 rounded-lg text-[9px] font-semibold uppercase tracking-wider whitespace-nowrap transition-colors ${adminTab === tab ? "bg-white text-black" : "text-white/60 hover:text-white border border-white/10"}`}
                       onClick={() => setAdminTab(tab)}>{tab === "custommatch" ? "Custom Match" : tab === "winners" ? "Winners" : tab}</button>
                   ))}
                 </div>
@@ -1428,7 +1533,7 @@ export default function App() {
                           onClick={() => setAdminGroup(g)}>Group {g}</button>
                       ))}
                     </div>
-                    {FIXTURES.filter(f => f.group === adminGroup).map(fix => {
+                    {mergeFixtures(FIXTURES, fixtureOverrides || {}).filter(f => f.group === adminGroup).map(fix => {
                       const res = results[fix.id];
                       return (
                         <div key={fix.id} className="liquid-glass p-4 rounded-xl border border-white/5 flex items-center justify-between text-left">
@@ -1437,9 +1542,12 @@ export default function App() {
                             <p className="text-[10px] text-white/40 mt-1">{formatDate(fix.date)}</p>
                             {res && <div className="frozen-inner rounded-lg px-3 py-2 text-xs font-semibold text-white/80 mt-2 inline-block">Result: {formatResultSummary(res, fix)}</div>}
                           </div>
-                          <button className="btn-secondary px-4 py-1.5 rounded-lg text-xs font-semibold" onClick={() => { setSelFixture(fix); setResHomeGoals(res?.homeGoals !== undefined ? String(res.homeGoals) : ""); setResAwayGoals(res?.awayGoals !== undefined ? String(res.awayGoals) : ""); }}>
-                            {res ? "Edit" : "Result"}
-                          </button>
+                          <div className="flex items-center gap-1">
+                            <button className="btn-secondary p-2 rounded-lg text-[10px] font-semibold" title="Edit fixture" onClick={() => openEditFixture(fix)}>✏️</button>
+                            <button className="btn-secondary px-3 py-1.5 rounded-lg text-xs font-semibold" onClick={() => { setSelFixture(fix); setResHomeGoals(res?.homeGoals !== undefined ? String(res.homeGoals) : ""); setResAwayGoals(res?.awayGoals !== undefined ? String(res.awayGoals) : ""); }}>
+                              {res ? "Edit" : "Result"}
+                            </button>
+                          </div>
                         </div>
                       );
                     })}
@@ -1918,6 +2026,45 @@ export default function App() {
             <div className="flex gap-3">
               <button className="btn-primary flex-1 py-3 rounded-full text-xs uppercase tracking-widest font-bold" onClick={handleSaveMatch}>{editingMatch ? "Update Match" : "Create Match"}</button>
               <button className="btn-secondary px-6 py-3 rounded-full text-xs font-semibold" onClick={() => setShowAddMatch(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editFixture && isAdmin && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={e => e.target === e.currentTarget && setEditFixture(null)}>
+          <div className="liquid-glass p-6 w-full max-w-md rounded-[1.25rem] border border-white/15 shadow-2xl relative text-left">
+            <h3 className="font-heading italic text-2xl text-white tracking-tight uppercase mb-4 text-amber-500">
+              Edit Fixture
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center mb-5">
+              <div>
+                <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Home Team</label>
+                <input className="input-glass w-full px-3 py-2 rounded-lg text-xs" placeholder="Home" value={editFixtureHome} onChange={e => setEditFixtureHome(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 8, fontSize: 13 }} />
+              </div>
+              <span className="text-center text-[10px] font-bold text-white/20 mt-4 hidden md:inline">VS</span>
+              <div>
+                <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Away Team</label>
+                <input className="input-glass w-full px-3 py-2 rounded-lg text-xs" placeholder="Away" value={editFixtureAway} onChange={e => setEditFixtureAway(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 8, fontSize: 13 }} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4 mb-5">
+              <div>
+                <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Match Date</label>
+                <input className="input-glass w-full px-3 py-2 rounded-lg text-xs" type="date" value={editFixtureDate} onChange={e => setEditFixtureDate(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 8, fontSize: 13 }} />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Kick-off Time</label>
+                <input className="input-glass w-full px-3 py-2 rounded-lg text-xs" type="time" value={editFixtureTime} onChange={e => setEditFixtureTime(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 8, fontSize: 13 }} />
+              </div>
+            </div>
+            <div className="mb-6">
+              <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Venue</label>
+              <input className="input-glass w-full px-3 py-2 rounded-lg text-xs" placeholder="e.g. MetLife Stadium" value={editFixtureVenue} onChange={e => setEditFixtureVenue(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 8, fontSize: 13 }} />
+            </div>
+            <div className="flex gap-3">
+              <button className="btn-primary flex-1 py-3 rounded-full text-xs uppercase tracking-widest font-bold" onClick={handleSaveFixtureEdit}>Save Changes</button>
+              <button className="btn-secondary px-6 py-3 rounded-full text-xs font-semibold" onClick={() => setEditFixture(null)}>Cancel</button>
             </div>
           </div>
         </div>

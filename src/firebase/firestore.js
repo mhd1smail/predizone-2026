@@ -168,6 +168,63 @@ export async function updateArenaSettings(data) {
   await setDoc(ref, { ...data, updatedAt: serverTimestamp() }, { merge: true });
 }
 
+const FIXTURE_OVERRIDES = "fixtureOverrides";
+
+export function onFixtureOverrides(callback) {
+  const ref = doc(db, SETTINGS, FIXTURE_OVERRIDES);
+  return onSnapshot(ref, (snap) => {
+    callback(snap.exists() ? snap.data().overrides || {} : {});
+  });
+}
+
+export async function saveFixtureOverride(fixtureId, override) {
+  const ref = doc(db, SETTINGS, FIXTURE_OVERRIDES);
+  await setDoc(ref, {
+    overrides: { [String(fixtureId)]: { ...override, updatedAt: serverTimestamp() } },
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
+}
+
+export async function undoLastFixtureEdit() {
+  const undoRef = doc(db, SETTINGS, "undo");
+  const undoSnap = await getDoc(undoRef);
+  if (!undoSnap.exists()) return null;
+  const data = undoSnap.data();
+  const elapsed = Date.now() - data.timestamp?.toMillis();
+  if (elapsed > 3600000) { return "expired"; }
+  const { fixtureId, previous } = data;
+  if (previous === null) {
+    const overrideRef = doc(db, SETTINGS, FIXTURE_OVERRIDES);
+    const snap = await getDoc(overrideRef);
+    const overrides = snap.exists() ? snap.data().overrides || {} : {};
+    delete overrides[fixtureId];
+    await setDoc(overrideRef, { overrides, updatedAt: serverTimestamp() }, { merge: true });
+  } else {
+    await saveFixtureOverride(fixtureId, previous);
+  }
+  await deleteDoc(undoRef);
+  return "undone";
+}
+
+export function onUndoStatus(callback) {
+  const ref = doc(db, SETTINGS, "undo");
+  return onSnapshot(ref, (snap) => {
+    if (!snap.exists()) { callback(null); return; }
+    const data = snap.data();
+    const elapsed = Date.now() - data.timestamp?.toMillis();
+    callback(elapsed < 3600000 ? { fixtureId: data.fixtureId, previous: data.previous, remainingMs: 3600000 - elapsed } : null);
+  });
+}
+
+export async function setUndoPoint(fixtureId, previous) {
+  const ref = doc(db, SETTINGS, "undo");
+  await setDoc(ref, {
+    fixtureId: String(fixtureId),
+    previous: previous || null,
+    timestamp: serverTimestamp(),
+  });
+}
+
 export async function getAllDataOnce() {
   const [usersSnap, predsSnap, resultsSnap, knockoutSnap] = await Promise.all([
     getDocs(collection(db, USERS)),
