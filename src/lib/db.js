@@ -29,6 +29,29 @@ export async function getUserProfile(uid) {
   return mapProfile(data);
 }
 
+export async function getProfileByEmail(email) {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("email", email)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapProfile(data) : null;
+}
+
+export async function updateUserProfileId(oldId, newId) {
+  const { error: profileError } = await supabase
+    .from("profiles")
+    .update({ id: newId })
+    .eq("id", oldId);
+  if (profileError) throw profileError;
+  const { error: predError } = await supabase
+    .from("predictions")
+    .update({ user_id: newId })
+    .eq("user_id", oldId);
+  if (predError) throw predError;
+}
+
 export async function updateUserProfile(uid, updates) {
   const { data, error } = await supabase
     .from("profiles")

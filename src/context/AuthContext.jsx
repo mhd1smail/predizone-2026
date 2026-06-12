@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
-import { getUserProfile } from "../lib/db";
+import { getUserProfile, getProfileByEmail, updateUserProfileId } from "../lib/db";
 
 const AuthContext = createContext(null);
 
@@ -13,7 +13,7 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
-        getUserProfile(session.user.id).then((profile) => {
+        handleUserSession(session.user).then((profile) => {
           if (profile) {
             setCurrentUser(profile);
           } else {
@@ -28,7 +28,7 @@ export function AuthProvider({ children }) {
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
-        const profile = await getUserProfile(session.user.id);
+        const profile = await handleUserSession(session.user);
         if (profile) {
           setCurrentUser(profile);
           setPendingAuthUser(null);
@@ -43,6 +43,24 @@ export function AuthProvider({ children }) {
 
     return () => listener?.subscription.unsubscribe();
   }, []);
+
+  async function handleUserSession(supabaseUser) {
+    // Try direct ID lookup first (for users who already signed in via Supabase)
+    let profile = await getUserProfile(supabaseUser.id);
+    if (profile) return profile;
+
+    // Fallback: look up by email (for users migrated from Firebase)
+    if (supabaseUser.email) {
+      const oldProfile = await getProfileByEmail(supabaseUser.email);
+      if (oldProfile) {
+        // Link old Firebase profile to new Supabase user ID
+        await updateUserProfileId(oldProfile.id, supabaseUser.id);
+        return await getUserProfile(supabaseUser.id);
+      }
+    }
+
+    return null;
+  }
 
   const value = {
     currentUser,
