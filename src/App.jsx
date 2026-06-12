@@ -557,6 +557,18 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const handleVisibility = () => {
+      if (document.hidden && audioRef.current) {
+        audioRef.current.pause();
+      } else if (!document.hidden && audioRef.current && page === "home") {
+        audioRef.current.play().catch(() => {});
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [page]);
+
+  useEffect(() => {
     const unsubStream = onStreamResponses((r) => setStreamResponses(r));
     return () => unsubStream();
   }, []);
@@ -904,7 +916,7 @@ export default function App() {
   );
 
   return (
-    <div className="relative w-full overflow-hidden bg-black text-white font-body selection:bg-white/20">
+    <div className="relative w-full overflow-hidden text-white font-body selection:bg-white/20">
 
       {toast && (
         <div className="toast-msg glass-panel p-4 rounded-[1.25rem] flex items-center gap-3 bg-black/90 border border-white/25 shadow-2xl max-w-sm pointer-events-auto">
@@ -1252,7 +1264,7 @@ export default function App() {
                     <Target className="h-3 w-3 inline mr-1" />Predict
                   </button>
                   <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "stream" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => setUserTab("stream")}>
-                    <Tv className="h-3 w-3 inline mr-1" />Stream
+                    <span className={userTab !== "stream" ? "blink-pulse" : ""}><Tv className="h-3 w-3 inline mr-1" />Stream</span>
                   </button>
                   <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "upcoming" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => setUserTab("upcoming")}>
                     <Calendar className="h-3 w-3 inline mr-1" />All
@@ -1773,7 +1785,7 @@ export default function App() {
                   return (fixB ? new Date(fixB.date) : 0) - (fixA ? new Date(fixA.date) : 0);
                 });
               return (
-                <div className="space-y-6">
+                <div className="space-y-6 pb-16">
                   <div className="text-left mb-2">
                     <h2 className="font-heading italic text-3xl uppercase tracking-tight text-white">YOUR STATS</h2>
                   </div>

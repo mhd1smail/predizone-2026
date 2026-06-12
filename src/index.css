@@ -12,6 +12,19 @@
 }
 
 body {
+  background: #000;
+}
+
+@keyframes blink-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.blink-pulse {
+  animation: blink-pulse 1.2s ease-in-out infinite;
+}
+
+body {
   background-color: var(--bg-dark);
   color: #ffffff;
   font-family: var(--font-sans);
