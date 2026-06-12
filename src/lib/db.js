@@ -53,9 +53,15 @@ export async function updateUserProfileId(oldId, newId) {
 }
 
 export async function updateUserProfile(uid, updates) {
+  const mapped = {};
+  if (updates.favoriteTeam !== undefined) mapped.favorite_team = updates.favoriteTeam;
+  if (updates.name !== undefined) mapped.name = updates.name;
+  if (updates.dept !== undefined) mapped.dept = updates.dept;
+  if (updates.year !== undefined) mapped.year = updates.year;
+  if (updates.photoURL !== undefined) mapped.photo_url = updates.photoURL;
   const { data, error } = await supabase
     .from("profiles")
-    .update(updates)
+    .update(mapped)
     .eq("id", uid)
     .select()
     .single();

@@ -3,7 +3,10 @@ import { supabase } from "./supabase";
 export async function signInWithGoogle() {
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
-    options: { queryParams: { access_type: "offline", prompt: "select_account" } },
+    options: {
+      redirectTo: window.location.origin,
+      queryParams: { access_type: "offline", prompt: "select_account" },
+    },
   });
   if (error) return { user: null, error: error.message };
   return { user: data, error: null };

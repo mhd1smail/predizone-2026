@@ -527,7 +527,7 @@ export default function App() {
   }, [currentUser, authLoading]);
 
   useEffect(() => {
-    if (currentUser && currentUser.favoriteTeam === undefined && !currentUser.isAdmin) {
+    if (currentUser && !currentUser.favoriteTeam && !currentUser.isAdmin && !localStorage.getItem("team-picker-declined")) {
       setPickerTeamIndex(0);
       setShowTeamPicker(true);
     }
@@ -761,8 +761,13 @@ export default function App() {
 
   const handlePickTeam = async (team) => {
     if (!currentUser) return;
-    await updateUserProfile(currentUser.id, { favoriteTeam: team });
-    setCurrentUser({ ...currentUser, favoriteTeam: team });
+    if (team) {
+      await updateUserProfile(currentUser.id, { favoriteTeam: team });
+      setCurrentUser({ ...currentUser, favoriteTeam: team });
+    } else {
+      localStorage.setItem("team-picker-declined", "true");
+      setCurrentUser({ ...currentUser, favoriteTeam: null });
+    }
     setShowTeamPicker(false);
   };
 
