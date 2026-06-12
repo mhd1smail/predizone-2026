@@ -2380,11 +2380,11 @@ export default function App() {
                     </div>
                   )}
 
-                  <footer className="pb-16 mt-auto text-center shrink-0">
+                  <footer className="mt-auto text-center shrink-0">
                     {!isAdmin && userTab === "you" ? (
                       <>
                         <p className="text-[10px] text-white/20 tracking-wide mb-2">say hi to me</p>
-                        <div className="flex items-center justify-center gap-4">
+                        <div className="mb-24 flex items-center justify-center gap-4">
                           <a href={CREATOR_LINKS.instagram} target="_blank" rel="noopener noreferrer" className="text-white/20 hover:text-white/70 transition-colors" aria-label="Instagram">
                             <IconInstagram className="h-3.5 w-3.5" />
                           </a>
@@ -2400,7 +2400,7 @@ export default function App() {
                         </div>
                       </>
                     ) : (
-                      <div className="flex items-center justify-center gap-6 pt-8">
+                      <div className="mb-24 flex items-center justify-center gap-6 pt-8">
                         {SPONSORS.map(sp => (
                           <img key={sp.label} src={sp.logo} alt={sp.name} className="h-8 sm:h-10 object-contain opacity-30 hover:opacity-60 transition-opacity rounded-2xl" />
                         ))}
