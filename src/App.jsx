@@ -606,7 +606,7 @@ export default function App() {
 
   const handleTouchStart = (e) => {
     const el = scrollContainerRef.current;
-    if (!el || el.scrollTop > 0) return;
+    if (!el) return;
     const t = e.touches[0];
     pullTouch.current.startX = t.clientX;
     pullTouch.current.startY = t.clientY;
@@ -627,9 +627,14 @@ export default function App() {
       setSwipeOffset(dx);
       return;
     }
-    if (dy <= 0) { setPullDistance(0); return; }
-    e.preventDefault();
-    setPullDistance(Math.min(dy * 0.5, 100));
+    const el = scrollContainerRef.current;
+    const atTop = el && el.scrollTop <= 0;
+    if (dy > 0 && atTop) {
+      e.preventDefault();
+      setPullDistance(Math.min(dy * 0.5, 100));
+    } else {
+      setPullDistance(0);
+    }
   };
 
   const handleTouchEnd = (e) => {
@@ -659,7 +664,9 @@ export default function App() {
       }
       return;
     }
-    if (pullDistance > 50) handleRefresh();
+    const el = scrollContainerRef.current;
+    const atTop = el && el.scrollTop <= 0;
+    if (pullDistance > 50 && atTop) handleRefresh();
     else setPullDistance(0);
   };
 
@@ -2384,7 +2391,7 @@ export default function App() {
                     {!isAdmin && userTab === "you" ? (
                       <>
                         <p className="text-[10px] text-white/20 tracking-wide mb-2">say hi to me</p>
-                        <div className="mb-24 flex items-center justify-center gap-4">
+                        <div className="mb-36 flex items-center justify-center gap-4">
                           <a href={CREATOR_LINKS.instagram} target="_blank" rel="noopener noreferrer" className="text-white/20 hover:text-white/70 transition-colors" aria-label="Instagram">
                             <IconInstagram className="h-3.5 w-3.5" />
                           </a>
@@ -2400,7 +2407,7 @@ export default function App() {
                         </div>
                       </>
                     ) : (
-                      <div className="mb-24 flex items-center justify-center gap-6 pt-8">
+                      <div className="mb-36 flex items-center justify-center gap-6 pt-8">
                         {SPONSORS.map(sp => (
                           <img key={sp.label} src={sp.logo} alt={sp.name} className="h-8 sm:h-10 object-contain opacity-30 hover:opacity-60 transition-opacity rounded-2xl" />
                         ))}
