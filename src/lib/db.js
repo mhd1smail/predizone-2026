@@ -75,11 +75,16 @@ export function onUserProfile(uid, callback) {
 }
 
 export function onAllUsers(callback) {
+  supabase.from("profiles").select("*").then(({ data }) => {
+    const users = {};
+    (data || []).forEach((u) => { users[u.id] = mapProfile(u); });
+    callback(users);
+  });
   const channel = supabase
     .channel("all-users")
     .on("postgres_changes",
       { event: "*", schema: "public", table: "profiles" },
-      (payload) => {
+      () => {
         supabase.from("profiles").select("*").then(({ data }) => {
           const users = {};
           (data || []).forEach((u) => { users[u.id] = mapProfile(u); });
@@ -108,6 +113,14 @@ export async function savePrediction(uid, fixtureId, prediction) {
 }
 
 export function onAllPredictions(callback) {
+  supabase.from("predictions").select("*").then(({ data }) => {
+    const preds = {};
+    (data || []).forEach((p) => {
+      const key = `${p.user_id}_${p.fixture_id}`;
+      preds[key] = mapPrediction(p);
+    });
+    callback(preds);
+  });
   const channel = supabase
     .channel("all-predictions")
     .on("postgres_changes",
@@ -143,6 +156,13 @@ export async function saveResult(fixtureId, result) {
 }
 
 export function onAllResults(callback) {
+  supabase.from("results").select("*").then(({ data }) => {
+    const results = {};
+    (data || []).forEach((r) => {
+      results[r.fixture_id] = mapResult(r);
+    });
+    callback(results);
+  });
   const channel = supabase
     .channel("all-results")
     .on("postgres_changes",
@@ -181,6 +201,9 @@ export async function deleteKnockoutMatch(matchId) {
 }
 
 export function onKnockoutMatches(callback) {
+  supabase.from("knockout_matches").select("*").then(({ data }) => {
+    callback(data || []);
+  });
   const channel = supabase
     .channel("knockout-matches")
     .on("postgres_changes",
