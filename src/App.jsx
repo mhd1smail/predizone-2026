@@ -315,30 +315,53 @@ function buildLeaderboard(users, predictions, results, knockoutFixtures, fixture
   }).sort((a, b) => b.points - a.points);
 }
 
-function getFixturePredictionStats(fixtureId, allPreds) {
+function getFixturePredictionStats(fixtureId, allPreds, homeTeam, awayTeam) {
   const fixturePreds = Object.values(allPreds).filter(p => String(p.fixtureId) === String(fixtureId) && p.winner);
   const total = fixturePreds.length;
   if (total === 0) return null;
-  const counts = {};
-  fixturePreds.forEach(p => { counts[p.winner] = (counts[p.winner] || 0) + 1; });
-  const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-  const bars = entries.map(([team, count]) => ({ team, count, pct: Math.round((count / total) * 100) }));
+  const merged = {};
+  fixturePreds.forEach(p => {
+    const raw = typeof p.winner === "string" ? p.winner.trim() : String(p.winner);
+    const key = raw.toLowerCase();
+    const isHome = key === (homeTeam || '').toLowerCase();
+    const isAway = key === (awayTeam || '').toLowerCase();
+    const isDraw = !isHome && !isAway;
+    const finalKey = isDraw ? 'draw' : key;
+    if (!merged[finalKey]) merged[finalKey] = { team: isDraw ? 'Draw' : raw, count: 0 };
+    merged[finalKey].count += 1;
+  });
+  const bars = Object.values(merged)
+    .sort((a, b) => b.count - a.count)
+    .map(bar => ({ ...bar, pct: Math.round((bar.count / total) * 100) }));
   return { total, bars };
 }
 
 function getUserStats(uid, preds, res, fixtures) {
   const userPreds = Object.values(preds).filter(p => p.uid === uid);
   const scored = userPreds.filter(p => res[p.fixtureId]);
-  const correct = scored.filter(p => {
+  const correctWinners = scored.filter(p => {
     const r = res[p.fixtureId];
     return p.winner && r.winner && p.winner === r.winner;
   });
+  const scoredWithScore = scored.filter(p => hasScoreline(p));
+  const correctScorelines = scoredWithScore.filter(p => {
+    const r = res[p.fixtureId];
+    return hasScoreline(r) &&
+      parseInt(p.homeGoals, 10) === parseInt(r.homeGoals, 10) &&
+      parseInt(p.awayGoals, 10) === parseInt(r.awayGoals, 10);
+  });
+  const winnerAcc = scored.length > 0 ? Math.round((correctWinners.length / scored.length) * 100) : 0;
+  const scorelineAcc = scoredWithScore.length > 0 ? Math.round((correctScorelines.length / scoredWithScore.length) * 100) : winnerAcc;
   const totalPossible = fixtures.length;
   return {
     totalPredictions: userPreds.length,
     scoredPredictions: scored.length,
-    correctWinners: correct.length,
-    accuracy: scored.length > 0 ? Math.round((correct.length / scored.length) * 100) : 0,
+    correctWinners: correctWinners.length,
+    accuracy: winnerAcc,
+    correctScorelines: correctScorelines.length,
+    totalScorelinePreds: scoredWithScore.length,
+    scorelineAccuracy: scorelineAcc,
+    overallAccuracy: Math.round((winnerAcc + scorelineAcc) / 2),
     totalPossible,
   };
 }
@@ -1181,19 +1204,18 @@ export default function App() {
 
             {/* ─── USER: Fixtures / Predict ─── */}
             {userTab === "fixtures" && !isAdmin && (() => {
-              const dayFixtures = todayFixtures.length > 0 ? todayFixtures : (() => {
-                if (futureFixtures.length === 0) return [];
-                const nextDate = new Date(futureFixtures[0].date).toDateString();
-                return futureFixtures.filter(f => new Date(f.date).toDateString() === nextDate);
-              })();
+              const openFixtures = sortedFixtures.filter(f => {
+                const s = getStatus(f, isLockedGlobal);
+                return (s === "open" || (s === "played" && !results[f.id])) && !results[f.id];
+              });
               return (
               <div className="space-y-4">
                 <div className="text-left mb-6">
-                  <h2 className="font-heading italic text-3xl uppercase tracking-tight text-white">{dayFixtures.length > 0 && isSameLocalDay(new Date(dayFixtures[0].date)) ? "TODAY'S MATCHES" : "NEXT MATCHES"}</h2>
-                  <p className="text-xs text-white/50 mt-1 uppercase tracking-wider">{dayFixtures.length > 0 ? formatDate(dayFixtures[0].date) : todayLabel()}</p>
+                  <h2 className="font-heading italic text-3xl uppercase tracking-tight text-white">OPEN PREDICTIONS</h2>
+                  <p className="text-xs text-white/50 mt-1 uppercase tracking-wider">{openFixtures.length} matches available</p>
                 </div>
 
-                {dayFixtures.length > 0 ? dayFixtures.map(fix => {
+                {openFixtures.length > 0 ? openFixtures.map(fix => {
                   const status = getStatus(fix, isLockedGlobal);
                   const key = `${currentUser.id}_${fix.id}`;
                   const myPred = predictions[key];
@@ -1231,10 +1253,17 @@ export default function App() {
                               {res.winner === fix.home && (
                                 <>
                                   {[...Array(6)].map((_, i) => (
-                                    <div key={i} className="confetti-piece" style={{
-                                      left: `${20 + i * 12}%`, top: `${i % 2 === 0 ? 10 : 40}%`,
+                                    <div key={`c${i}`} className="confetti-piece" style={{
+                                      left: `${10 + i * 14}%`, top: `${10 + (i % 2) * 30}%`,
                                       background: `hsl(${i * 60}, 80%, 60%)`,
-                                      animationDelay: `${i * 0.12}s`,
+                                      animationDelay: `${i * 0.15}s`,
+                                    }} />
+                                  ))}
+                                  {[...Array(4)].map((_, i) => (
+                                    <div key={`f${i}`} className="firecracker" style={{
+                                      left: `${30 + i * 14}%`, top: `${5 + i * 8}%`,
+                                      background: `hsl(${i * 90 + 20}, 90%, 60%)`,
+                                      animationDelay: `${i * 0.2}s`,
                                     }} />
                                   ))}
                                 </>
@@ -1249,10 +1278,17 @@ export default function App() {
                               {res.winner === fix.away && (
                                 <>
                                   {[...Array(6)].map((_, i) => (
-                                    <div key={i} className="confetti-piece" style={{
-                                      left: `${20 + i * 12}%`, top: `${i % 2 === 0 ? 10 : 40}%`,
+                                    <div key={`c${i}`} className="confetti-piece" style={{
+                                      left: `${10 + i * 14}%`, top: `${10 + (i % 2) * 30}%`,
                                       background: `hsl(${i * 60 + 30}, 80%, 60%)`,
-                                      animationDelay: `${i * 0.12}s`,
+                                      animationDelay: `${i * 0.15}s`,
+                                    }} />
+                                  ))}
+                                  {[...Array(4)].map((_, i) => (
+                                    <div key={`f${i}`} className="firecracker" style={{
+                                      left: `${30 + i * 14}%`, top: `${5 + i * 8}%`,
+                                      background: `hsl(${i * 90 + 50}, 90%, 60%)`,
+                                      animationDelay: `${i * 0.2}s`,
                                     }} />
                                   ))}
                                 </>
@@ -1265,19 +1301,19 @@ export default function App() {
                             </div>
                           )}
                           {(() => {
-                            const stats = getFixturePredictionStats(fix.id, predictions);
+                            const stats = getFixturePredictionStats(fix.id, predictions, fix.home, fix.away);
                             if (!stats || stats.bars.length === 0) return null;
                             return (
                               <div className="mt-3 pt-3 border-t border-white/10">
                                 <p className="text-[9px] text-white/40 uppercase tracking-wider text-center mb-2">Prediction Distribution</p>
                                 <div className="space-y-1.5">
-                                  {stats.bars.map(bar => (
-                                    <div key={bar.team} className="flex items-center gap-2">
+                                  {stats.bars.map((bar, bi) => (
+                                    <div key={`${bar.team}-${bi}`} className="flex items-center gap-2">
                                       <span className="text-[8px] text-white/50 w-10 text-right leading-tight truncate shrink-0">{bar.team === fix.home ? fix.home : bar.team === fix.away ? fix.away : "Draw"}</span>
                                       <div className="flex-1 h-4 rounded-full bg-white/5 overflow-hidden">
                                         <div className="h-full rounded-full transition-all duration-500" style={{
                                           width: `${bar.pct}%`,
-                                          background: bar.team === fix.home ? "#22c55e" : bar.team === fix.away ? "#3b82f6" : "#a855f7",
+                                          background: bar.team === fix.home ? "#22c55e" : bar.team === fix.away ? "#3b82f6" : "#ffffff",
                                         }} />
                                       </div>
                                       <span className="text-[9px] font-bold text-white/70 w-8 text-left shrink-0">{bar.pct}%</span>
@@ -1291,19 +1327,19 @@ export default function App() {
                       ) : status === "played" ? (
                         <div className="frozen-inner rounded-xl p-4 max-w-xs mx-auto">
                           {(() => {
-                            const stats = getFixturePredictionStats(fix.id, predictions);
+                            const stats = getFixturePredictionStats(fix.id, predictions, fix.home, fix.away);
                             if (!stats || stats.bars.length === 0) return <p className="text-[10px] text-white/40 text-center">No predictions yet</p>;
                             return (
                               <div>
                                 <p className="text-[9px] text-white/40 uppercase tracking-wider text-center mb-3">Prediction Distribution</p>
                                 <div className="space-y-1.5">
-                                  {stats.bars.map(bar => (
-                                    <div key={bar.team} className="flex items-center gap-2">
+                                  {stats.bars.map((bar, bi) => (
+                                    <div key={`${bar.team}-${bi}`} className="flex items-center gap-2">
                                       <span className="text-[8px] text-white/50 w-10 text-right leading-tight truncate shrink-0">{bar.team === fix.home ? fix.home : bar.team === fix.away ? fix.away : "Draw"}</span>
                                       <div className="flex-1 h-4 rounded-full bg-white/5 overflow-hidden">
                                         <div className="h-full rounded-full transition-all duration-500" style={{
                                           width: `${bar.pct}%`,
-                                          background: bar.team === fix.home ? "#22c55e" : bar.team === fix.away ? "#3b82f6" : "#a855f7",
+                                          background: bar.team === fix.home ? "#22c55e" : bar.team === fix.away ? "#3b82f6" : "#ffffff",
                                         }} />
                                       </div>
                                       <span className="text-[9px] font-bold text-white/70 w-8 text-left shrink-0">{bar.pct}%</span>
@@ -1420,11 +1456,12 @@ export default function App() {
             )}
 
             {/* ─── USER: Finished Matches ─── */}
-            {userTab === "finished" && !isAdmin && (
-              <div className="space-y-4">
+            {userTab === "finished" && !isAdmin && (() => {
+              return (
+                <div className="space-y-4">
                 <div className="text-left mb-6">
                   <h2 className="font-heading italic text-3xl uppercase tracking-tight text-white">FINISHED MATCHES</h2>
-                  <p className="text-xs text-white/50 mt-1 uppercase tracking-wider">{finishedFixtures.length} matches played</p>
+                  <p className="text-xs text-white/50 mt-1 uppercase tracking-wider">{finishedFixtures.filter(f => results[f.id]).length} matches played</p>
                 </div>
                 {finishedFixtures.length === 0 ? (
                   <div className="liquid-glass rounded-[1.5rem] p-12 text-center border border-white/5">
@@ -1433,46 +1470,105 @@ export default function App() {
                     <p className="text-xs text-white/40 max-w-sm mx-auto mt-2">Completed matches will appear here.</p>
                   </div>
                 ) : (
-                  finishedFixtures.map(fix => {
+                  finishedFixtures.filter(f => results[f.id]).map(fix => {
                     const key = `${currentUser.id}_${fix.id}`;
                     const myPred = predictions[key];
                     const res = results[fix.id];
                     const pts = res && myPred ? calcPoints(myPred, res, fix) : null;
                     return (
-                      <div key={fix.id} className="liquid-glass p-4 rounded-xl border border-white/5 flex items-center justify-between text-left">
-                        <div className="flex items-center gap-4 flex-1">
-                          <div className="text-center min-w-[50px]">
-                            <span className="text-xs font-semibold text-white/70 block">{new Date(fix.date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</span>
-                            <span className="text-[9px] text-white/40">{new Date(fix.date).toLocaleDateString("en-IN", { weekday: "short" })}</span>
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="text-lg">{fl(fix.home)}</span>
-                              <span className="text-xs font-semibold text-white/90">{fix.home}</span>
-                            </div>
-                            <div className="flex items-center gap-2 mt-1">
-                              <span className="text-lg">{fl(fix.away)}</span>
-                              <span className="text-xs font-semibold text-white/90">{fix.away}</span>
-                            </div>
-                          </div>
+                      <div key={fix.id} className="liquid-glass p-6 rounded-[1.5rem] border border-white/10 text-center">
+                        <div className="flex justify-between items-center mb-4">
+                          <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest">{fix.isKnockout ? fix.round : `Group ${fix.group}`}</span>
+                          <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-950 text-blue-400 border border-blue-800">FT</span>
                         </div>
-                        <div className="text-right">
-                          {res ? (
-                            <div>
-                              <p className="text-xs font-bold text-white/90">{res.homeGoals ?? "?"}–{res.awayGoals ?? "?"}</p>
-                              <p className="text-[8px] text-white/40 uppercase tracking-wider mt-0.5">FT</p>
-                              {pts !== null && <p className={`text-[9px] font-bold mt-1 ${pts > 0 ? "text-green-400" : "text-white/40"}`}>{pts > 0 ? `+${pts}` : "0"} PTS</p>}
+                        <p className="text-[10px] text-white/40 mb-4">{formatDate(fix.date)}</p>
+                        <div className="relative frozen-inner rounded-xl p-4 max-w-xs mx-auto">
+                          <div className="flex items-center justify-center gap-6 mb-2">
+                            <div className={`text-center relative ${res.winner === fix.home ? "scale-110" : "opacity-60"}`}>
+                              <span className="text-4xl block mb-1">{fl(fix.home)}</span>
+                              <span className="text-[10px] font-semibold text-white/90 block">{fix.home}</span>
+                              {res.winner === fix.home && (
+                                <>
+                                  {[...Array(6)].map((_, i) => (
+                                    <div key={`c${i}`} className="confetti-piece" style={{
+                                      left: `${10 + i * 14}%`, top: `${10 + (i % 2) * 30}%`,
+                                      background: `hsl(${i * 60}, 80%, 60%)`,
+                                      animationDelay: `${i * 0.15}s`,
+                                    }} />
+                                  ))}
+                                  {[...Array(4)].map((_, i) => (
+                                    <div key={`f${i}`} className="firecracker" style={{
+                                      left: `${30 + i * 14}%`, top: `${5 + i * 8}%`,
+                                      background: `hsl(${i * 90 + 20}, 90%, 60%)`,
+                                      animationDelay: `${i * 0.2}s`,
+                                    }} />
+                                  ))}
+                                </>
+                              )}
                             </div>
-                          ) : (
-                            <span className="text-[9px] text-white/40">No result</span>
+                            <div className="text-center font-heading italic text-2xl text-white">
+                              {res.homeGoals ?? "?"}–{res.awayGoals ?? "?"}
+                            </div>
+                            <div className={`text-center relative ${res.winner === fix.away ? "scale-110" : "opacity-60"}`}>
+                              <span className="text-4xl block mb-1">{fl(fix.away)}</span>
+                              <span className="text-[10px] font-semibold text-white/90 block">{fix.away}</span>
+                              {res.winner === fix.away && (
+                                <>
+                                  {[...Array(6)].map((_, i) => (
+                                    <div key={`c${i}`} className="confetti-piece" style={{
+                                      left: `${10 + i * 14}%`, top: `${10 + (i % 2) * 30}%`,
+                                      background: `hsl(${i * 60 + 30}, 80%, 60%)`,
+                                      animationDelay: `${i * 0.15}s`,
+                                    }} />
+                                  ))}
+                                  {[...Array(4)].map((_, i) => (
+                                    <div key={`f${i}`} className="firecracker" style={{
+                                      left: `${30 + i * 14}%`, top: `${5 + i * 8}%`,
+                                      background: `hsl(${i * 90 + 50}, 90%, 60%)`,
+                                      animationDelay: `${i * 0.2}s`,
+                                    }} />
+                                  ))}
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          {pts !== null && (
+                            <div className="text-center mb-2">
+                              <span className={`font-semibold px-3 py-1 rounded-full text-xs ${pts > 0 ? "bg-green-950 text-green-400" : "frozen-tag text-white/40"}`}>{pts > 0 ? `+${pts} PTS` : "0 PTS"}</span>
+                            </div>
                           )}
+                          {(() => {
+                            const stats = getFixturePredictionStats(fix.id, predictions, fix.home, fix.away);
+                            if (!stats || stats.bars.length === 0) return null;
+                            return (
+                              <div className="mt-3 pt-3 border-t border-white/10">
+                                <p className="text-[9px] text-white/40 uppercase tracking-wider text-center mb-2">Prediction Distribution</p>
+                                <div className="space-y-1.5">
+                                  {stats.bars.map((bar, bi) => (
+                                    <div key={`${bar.team}-${bi}`} className="flex items-center gap-2">
+                                      <span className="text-[8px] text-white/50 w-10 text-right leading-tight truncate shrink-0">{bar.team === fix.home ? fix.home : bar.team === fix.away ? fix.away : "Draw"}</span>
+                                      <div className="flex-1 h-4 rounded-full bg-white/5 overflow-hidden">
+                                        <div className="h-full rounded-full transition-all duration-500" style={{
+                                          width: `${bar.pct}%`,
+                                          background: bar.team === fix.home ? "#22c55e" : bar.team === fix.away ? "#3b82f6" : "#ffffff",
+                                        }} />
+                                      </div>
+                                      <span className="text-[9px] font-bold text-white/70 w-8 text-left shrink-0">{bar.pct}%</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
                     );
                   })
-                )}
-              </div>
-            )}
+                )
+                }
+                </div>
+              );
+            })()}
 
             {/* ─── USER: Leaderboard ─── */}
             {userTab === "leaderboard" && !isAdmin && (
@@ -1540,7 +1636,7 @@ export default function App() {
                       <p className="text-[9px] text-white/50 uppercase tracking-widest mt-1">Predictions</p>
                     </div>
                     <div className="liquid-glass p-4 rounded-xl border border-white/5 text-center">
-                      <span className="text-2xl font-bold text-white">{stats.accuracy}%</span>
+                      <span className="text-2xl font-bold text-white">{stats.overallAccuracy}%</span>
                       <p className="text-[9px] text-white/50 uppercase tracking-widest mt-1">Accuracy</p>
                     </div>
                   </div>
@@ -1553,15 +1649,27 @@ export default function App() {
                         <circle cx="60" cy="60" r="52" fill="none" stroke={stats.accuracy > 50 ? "#22c55e" : "#eab308"} strokeWidth="10"
                           strokeDasharray={`${(stats.accuracy / 100) * 327} 327`}
                           strokeLinecap="round" />
+                        <circle cx="60" cy="60" r="38" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="8" />
+                        <circle cx="60" cy="60" r="38" fill="none" stroke={stats.scorelineAccuracy > 50 ? "#3b82f6" : "#a855f7"} strokeWidth="8"
+                          strokeDasharray={`${(stats.scorelineAccuracy / 100) * 239} 239`}
+                          strokeLinecap="round" />
                       </svg>
                       <div className="text-left">
                         <div className="flex items-center gap-3 mb-2">
                           <span className="w-3 h-3 rounded-full bg-green-500" />
-                          <span className="text-xs text-white/70">Correct: {stats.correctWinners}</span>
+                          <span className="text-xs text-white/70">Winner Correct: {stats.correctWinners}</span>
                         </div>
                         <div className="flex items-center gap-3 mb-2">
                           <span className="w-3 h-3 rounded-full bg-white/20" />
-                          <span className="text-xs text-white/70">Incorrect: {stats.scoredPredictions - stats.correctWinners}</span>
+                          <span className="text-xs text-white/70">Winner Incorrect: {stats.scoredPredictions - stats.correctWinners}</span>
+                        </div>
+                        <div className="flex items-center gap-3 mb-2">
+                          <span className="w-3 h-3 rounded-full bg-blue-500" />
+                          <span className="text-xs text-white/70">Scoreline Correct: {stats.correctScorelines}</span>
+                        </div>
+                        <div className="flex items-center gap-3 mb-2">
+                          <span className="w-3 h-3 rounded-full bg-white/20" />
+                          <span className="text-xs text-white/70">Scoreline Incorrect: {stats.totalScorelinePreds - stats.correctScorelines}</span>
                         </div>
                         <div className="flex items-center gap-3">
                           <span className="w-3 h-3 rounded-full bg-white/10" />
@@ -1801,7 +1909,7 @@ export default function App() {
                 {/* ADMIN: Finished */}
                 {adminTab === "finished" && (
                   <div className="space-y-3">
-                    {finishedFixtures.length === 0 ? (
+                {finishedFixtures.filter(f => results[f.id]).length === 0 ? (
                       <p className="text-xs text-white/40 py-8 text-center">No finished matches.</p>
                     ) : (
                       finishedFixtures.map(fix => {
@@ -1905,7 +2013,7 @@ export default function App() {
                           <p className="text-[9px] text-white/50 uppercase tracking-widest mt-1">Predictions</p>
                         </div>
                         <div className="liquid-glass p-4 rounded-xl border border-white/5 text-center">
-                          <span className="text-2xl font-bold text-white">{stats.accuracy}%</span>
+                          <span className="text-2xl font-bold text-white">{stats.overallAccuracy}%</span>
                           <p className="text-[9px] text-white/50 uppercase tracking-widest mt-1">Accuracy</p>
                         </div>
                       </div>
@@ -1918,15 +2026,27 @@ export default function App() {
                             <circle cx="60" cy="60" r="52" fill="none" stroke={stats.accuracy > 50 ? "#22c55e" : "#eab308"} strokeWidth="10"
                               strokeDasharray={`${(stats.accuracy / 100) * 327} 327`}
                               strokeLinecap="round" />
+                            <circle cx="60" cy="60" r="38" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="8" />
+                            <circle cx="60" cy="60" r="38" fill="none" stroke={stats.scorelineAccuracy > 50 ? "#3b82f6" : "#a855f7"} strokeWidth="8"
+                              strokeDasharray={`${(stats.scorelineAccuracy / 100) * 239} 239`}
+                              strokeLinecap="round" />
                           </svg>
                           <div className="text-left">
                             <div className="flex items-center gap-3 mb-2">
                               <span className="w-3 h-3 rounded-full bg-green-500" />
-                              <span className="text-xs text-white/70">Correct: {stats.correctWinners}</span>
+                              <span className="text-xs text-white/70">Winner Correct: {stats.correctWinners}</span>
                             </div>
                             <div className="flex items-center gap-3 mb-2">
                               <span className="w-3 h-3 rounded-full bg-white/20" />
-                              <span className="text-xs text-white/70">Incorrect: {stats.scoredPredictions - stats.correctWinners}</span>
+                              <span className="text-xs text-white/70">Winner Incorrect: {stats.scoredPredictions - stats.correctWinners}</span>
+                            </div>
+                            <div className="flex items-center gap-3 mb-2">
+                              <span className="w-3 h-3 rounded-full bg-blue-500" />
+                              <span className="text-xs text-white/70">Scoreline Correct: {stats.correctScorelines}</span>
+                            </div>
+                            <div className="flex items-center gap-3 mb-2">
+                              <span className="w-3 h-3 rounded-full bg-white/20" />
+                              <span className="text-xs text-white/70">Scoreline Incorrect: {stats.totalScorelinePreds - stats.correctScorelines}</span>
                             </div>
                             <div className="flex items-center gap-3">
                               <span className="w-3 h-3 rounded-full bg-white/10" />
