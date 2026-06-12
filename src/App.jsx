@@ -923,7 +923,7 @@ export default function App() {
       {currentUser && !needsProfile && !isAdmin && (
         <FixedVideoBackground src={DASHBOARD_VIDEO_SRC} fallbackSrc={HERO_VIDEO_FALLBACK} muted={isMuted} />
       )}
-      <div className="relative w-full text-white font-body selection:bg-white/20">
+      <div className="relative w-full text-white font-body text-outline selection:bg-white/20">
 
       {toast && (
         <div className="toast-msg glass-panel p-4 rounded-[1.25rem] flex items-center gap-3 bg-black/90 border border-white/25 shadow-2xl max-w-sm pointer-events-auto">
