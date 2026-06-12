@@ -446,10 +446,8 @@ export default function App() {
   const [isMobile, setIsMobile] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const audioRef = useRef(null);
-  const [refreshKey, setRefreshKey] = useState(0);
   const pullTouch = useRef({ startY: 0, pulling: false });
   const [pullDistance, setPullDistance] = useState(0);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const scrollContainerRef = useRef(null);
   const [adminTab, setAdminTab] = useState("results");
   const [adminGroup, setAdminGroup] = useState("A");
@@ -574,13 +572,11 @@ export default function App() {
     });
 
     return () => { unsubUsers(); unsubResults(); unsubKnock(); unsubPreds(); };
-  }, [currentUser, refreshKey]);
+  }, [currentUser]);
 
   const handleRefresh = () => {
-    setIsRefreshing(true);
     setPullDistance(0);
-    setRefreshKey(k => k + 1);
-    setTimeout(() => setIsRefreshing(false), 1500);
+    window.location.reload();
   };
 
   const handleTouchStart = (e) => {
@@ -1282,7 +1278,7 @@ export default function App() {
 
             {pullDistance > 0 && (
               <div className="flex items-center justify-center py-2 transition-all duration-100" style={{ opacity: Math.min(pullDistance / 50, 1), transform: `translateY(${pullDistance * 0.5}px)` }}>
-                <div className={`w-6 h-6 border-2 border-white/30 ${isRefreshing ? "border-t-white animate-spin" : "border-t-transparent"} rounded-full`} />
+                <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full" />
               </div>
             )}
 
