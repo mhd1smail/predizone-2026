@@ -446,6 +446,11 @@ export default function App() {
   const [isMobile, setIsMobile] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const audioRef = useRef(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const pullTouch = useRef({ startY: 0, pulling: false });
+  const [pullDistance, setPullDistance] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const scrollContainerRef = useRef(null);
   const [adminTab, setAdminTab] = useState("results");
   const [adminGroup, setAdminGroup] = useState("A");
   const [viewingParticipant, setViewingParticipant] = useState(null);
@@ -569,7 +574,36 @@ export default function App() {
     });
 
     return () => { unsubUsers(); unsubResults(); unsubKnock(); unsubPreds(); };
-  }, [currentUser]);
+  }, [currentUser, refreshKey]);
+
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    setPullDistance(0);
+    setRefreshKey(k => k + 1);
+    setTimeout(() => setIsRefreshing(false), 1500);
+  };
+
+  const handleTouchStart = (e) => {
+    const el = scrollContainerRef.current;
+    if (!el || el.scrollTop > 0) return;
+    pullTouch.current.startY = e.touches[0].clientY;
+    pullTouch.current.pulling = true;
+  };
+
+  const handleTouchMove = (e) => {
+    if (!pullTouch.current.pulling) return;
+    const delta = e.touches[0].clientY - pullTouch.current.startY;
+    if (delta <= 0) { setPullDistance(0); return; }
+    e.preventDefault();
+    setPullDistance(Math.min(delta * 0.5, 100));
+  };
+
+  const handleTouchEnd = () => {
+    if (!pullTouch.current.pulling) return;
+    pullTouch.current.pulling = false;
+    if (pullDistance > 50) handleRefresh();
+    else setPullDistance(0);
+  };
 
   const handleGoogleSignIn = async () => {
     if (signingIn) return;
@@ -641,6 +675,16 @@ export default function App() {
       awayGoals: parseInt(predAwayGoals, 10),
     });
 
+    setPredictions(prev => ({
+      ...prev,
+      [key]: {
+        uid: currentUser.id,
+        fixtureId: String(predFixture.id),
+        winner: effectiveWinner,
+        homeGoals: parseInt(predHomeGoals, 10),
+        awayGoals: parseInt(predAwayGoals, 10),
+      }
+    }));
     setPredFixture(null);
     setPredWinner("");
     setPredHomeGoals("");
@@ -1234,7 +1278,13 @@ export default function App() {
             <p className="text-[9px] text-white/20 text-center mt-2 sm:hidden select-none">swipe →</p>
           </header>
           <audio ref={audioRef} src={BG_MUSIC_SRC} loop autoPlay />
-          <div className="pb-8 flex-1 overflow-y-auto no-scrollbar flex flex-col pb-4 pb-safe">
+          <div ref={scrollContainerRef} className="pb-8 flex-1 overflow-y-auto no-scrollbar flex flex-col pb-4 pb-safe" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
+
+            {pullDistance > 0 && (
+              <div className="flex items-center justify-center py-2 transition-all duration-100" style={{ opacity: Math.min(pullDistance / 50, 1), transform: `translateY(${pullDistance * 0.5}px)` }}>
+                <div className={`w-6 h-6 border-2 border-white/30 ${isRefreshing ? "border-t-white animate-spin" : "border-t-transparent"} rounded-full`} />
+              </div>
+            )}
 
             {!isAdmin && (
               <div className="liquid-glass px-5 py-6 sm:px-6 sm:py-8 rounded-[1.25rem] border border-white/5 mb-6 min-h-[100px] md:min-h-[110px] overflow-hidden cursor-pointer" onClick={() => setUserTab("you")}>
@@ -1473,10 +1523,10 @@ export default function App() {
                       <>
                         <h3 className="font-heading italic text-xl text-white mb-6">Would you like live streaming of World Cup matches here?</h3>
                         <div className="flex gap-4 justify-center">
-                          <button className="btn-primary px-8 py-3 rounded-full text-sm uppercase tracking-widest font-bold bg-green-600 hover:bg-green-500" onClick={async () => { await submitStreamResponse(currentUser.id, "yes"); }}>
+                          <button className="btn-primary px-8 py-3 rounded-full text-sm uppercase tracking-widest font-bold bg-green-600 hover:bg-green-500" onClick={async () => { try { await submitStreamResponse(currentUser.id, "yes"); setStreamResponses(prev => ({ ...prev, [currentUser.id]: { user_id: currentUser.id, response: "yes", submitted_at: new Date().toISOString() } })); } catch (e) { showToast("Failed to submit vote", "error"); } }}>
                             Yes
                           </button>
-                          <button className="btn-primary px-8 py-3 rounded-full text-sm uppercase tracking-widest font-bold bg-red-600 hover:bg-red-500" onClick={async () => { await submitStreamResponse(currentUser.id, "no"); }}>
+                          <button className="btn-primary px-8 py-3 rounded-full text-sm uppercase tracking-widest font-bold bg-red-600 hover:bg-red-500" onClick={async () => { try { await submitStreamResponse(currentUser.id, "no"); setStreamResponses(prev => ({ ...prev, [currentUser.id]: { user_id: currentUser.id, response: "no", submitted_at: new Date().toISOString() } })); } catch (e) { showToast("Failed to submit vote", "error"); } }}>
                             No
                           </button>
                         </div>
@@ -2100,7 +2150,7 @@ export default function App() {
                         <div className="bg-red-500 h-full transition-all" style={{ width: `${(Object.values(streamResponses).filter(r => r.response === "no").length / Math.max(Object.values(streamResponses).filter(r => r.response === "yes" || r.response === "no").length, 1)) * 100}%` }} />
                       </div>
                     )}
-                    <button className="btn-secondary px-4 py-2 rounded-lg text-xs font-semibold border-red-500/30 text-red-400 hover:bg-red-500/10" onClick={async () => { await clearStreamPoll(); }}>
+                    <button className="btn-secondary px-4 py-2 rounded-lg text-xs font-semibold border-red-500/30 text-red-400 hover:bg-red-500/10" onClick={async () => { await clearStreamPoll(); setStreamResponses({}); }}>
                       Clear All Responses
                     </button>
                   </div>

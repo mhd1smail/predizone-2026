@@ -286,6 +286,15 @@ body {
   scrollbar-width: none;
 }
 
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.overflow-y-auto {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
 /* Input glass — always visible text, dark on light bg */
 .input-glass {
   background: rgba(255, 255, 255, 0.1);
@@ -527,8 +536,8 @@ body {
 }
 
 .card-gold {
-  background: linear-gradient(135deg, rgba(255,215,0,0.12), rgba(255,200,0,0.06)) !important;
-  border-color: rgba(255,215,0,0.3) !important;
-  box-shadow: 0 0 24px rgba(255,215,0,0.15), inset 0 0 12px rgba(255,215,0,0.05);
+  background: linear-gradient(135deg, rgba(255,215,0,0.18), rgba(255,200,0,0.10)) !important;
+  border-color: rgba(255,215,0,0.4) !important;
+  box-shadow: 0 0 24px rgba(255,215,0,0.2), inset 0 0 12px rgba(255,215,0,0.08);
 }
 
