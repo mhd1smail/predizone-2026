@@ -1242,7 +1242,7 @@ export default function App() {
 
       {currentUser && !needsProfile && (
         <div className="max-w-3xl mx-auto px-4 h-screen flex flex-col pt-4 relative z-10 no-scrollbar">
-          <header className="liquid-glass rounded-[1.25rem] border border-white/10 mb-6 shrink-0">
+          <header className="liquid-glass rounded-[1.25rem] border border-white/10 mb-2 shrink-0">
             <div className="flex items-center justify-between p-4">
               <div className="flex items-center gap-2 select-none">
                 <span className="text-xl">🏆</span>
@@ -1288,7 +1288,7 @@ export default function App() {
             <p className="text-[9px] text-white/20 text-center mt-2 sm:hidden select-none">swipe →</p>
           </header>
           <audio ref={audioRef} src={BG_MUSIC_SRC} loop autoPlay />
-          <div ref={scrollContainerRef} className="pb-8 flex-1 overflow-y-auto no-scrollbar flex flex-col pb-4 pb-safe" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
+          <div ref={scrollContainerRef} className="flex-1 overflow-y-auto no-scrollbar flex flex-col pb-safe" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
 
             {pullDistance > 0 && (
               <div className="flex items-center justify-center py-2 transition-all duration-100" style={{ opacity: Math.min(pullDistance / 50, 1), transform: `translateY(${pullDistance * 0.5}px)` }}>
@@ -1787,7 +1787,7 @@ export default function App() {
                   return (fixB ? new Date(fixB.date) : 0) - (fixA ? new Date(fixA.date) : 0);
                 });
               return (
-                <div className="space-y-6 pb-16">
+                <div className="space-y-6">
                   <div className="text-left mb-2">
                     <h2 className="font-heading italic text-3xl uppercase tracking-tight text-white">YOUR STATS</h2>
                   </div>
@@ -2328,7 +2328,7 @@ export default function App() {
               </div>
             )}
 
-            <footer className="mb-24 mt-auto text-center pb-4 shrink-0">
+            <footer className="mt-auto text-center shrink-0">
               {!isAdmin && userTab === "you" ? (
                 <>
                   <p className="text-[10px] text-white/20 tracking-wide mb-2">say hi to me</p>
@@ -2348,7 +2348,7 @@ export default function App() {
                   </div>
                 </>
               ) : (
-                <div className="pb-20 flex items-center justify-center gap-6 pt-16">
+                <div className="pb-8 flex items-center justify-center gap-6 pt-8">
                   {SPONSORS.map(sp => (
                     <img key={sp.label} src={sp.logo} alt={sp.name} className="h-8 sm:h-10 object-contain opacity-30 hover:opacity-60 transition-opacity rounded-2xl" />
                   ))}
