@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/set-state-in-effect */
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, ArrowUpRight, Play, Award, LogOut, CheckCircle, User, Zap, Mail, Target, Lock, Unlock, Eye, Trophy, Calendar, Volume2, VolumeX, Tv } from "lucide-react";
 import { useAuth } from "./context/AuthContext";
@@ -446,9 +446,15 @@ export default function App() {
   const [isMobile, setIsMobile] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const audioRef = useRef(null);
-  const pullTouch = useRef({ startY: 0, pulling: false });
+  const pullTouch = useRef({ startX: 0, startY: 0, pulling: false, swiping: false });
   const [pullDistance, setPullDistance] = useState(0);
+  const [swipeOffset, setSwipeOffset] = useState(0);
+  const slideDir = useRef(0);
   const scrollContainerRef = useRef(null);
+  const swipeContainerRef = useRef(null);
+  const tabBarRef = useRef(null);
+  const userTabs = useMemo(() => ["fixtures", "stream", "upcoming", "finished", "leaderboard", "you"], []);
+  const adminTabs = useMemo(() => ["results", "matches", "custommatch", "winners", "upcoming", "finished", "stream", "leaderboard", "participants"], []);
   const [adminTab, setAdminTab] = useState("results");
   const [adminGroup, setAdminGroup] = useState("A");
   const [viewingParticipant, setViewingParticipant] = useState(null);
@@ -498,7 +504,7 @@ export default function App() {
   useEffect(() => {
     const el = audioRef.current;
     if (!el) return;
-    const play = () => { el.play().catch(() => {}); };
+    const play = () => { el.play().catch(() => { }); };
     play();
     const handler = () => { play(); document.removeEventListener("click", handler); };
     document.addEventListener("click", handler);
@@ -561,7 +567,7 @@ export default function App() {
       if (document.hidden && audioRef.current) {
         audioRef.current.pause();
       } else if (!document.hidden && audioRef.current && page === "home") {
-        audioRef.current.play().catch(() => {});
+        audioRef.current.play().catch(() => { });
       }
     };
     document.addEventListener("visibilitychange", handleVisibility);
@@ -586,6 +592,13 @@ export default function App() {
     return () => { unsubUsers(); unsubResults(); unsubKnock(); unsubPreds(); };
   }, [currentUser]);
 
+  useEffect(() => {
+    const el = tabBarRef.current;
+    if (!el) return;
+    const active = el.querySelector(".bg-white.text-black");
+    if (active) active.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  }, [userTab, adminTab]);
+
   const handleRefresh = () => {
     setPullDistance(0);
     window.location.reload();
@@ -594,21 +607,58 @@ export default function App() {
   const handleTouchStart = (e) => {
     const el = scrollContainerRef.current;
     if (!el || el.scrollTop > 0) return;
-    pullTouch.current.startY = e.touches[0].clientY;
+    const t = e.touches[0];
+    pullTouch.current.startX = t.clientX;
+    pullTouch.current.startY = t.clientY;
     pullTouch.current.pulling = true;
+    pullTouch.current.swiping = false;
   };
 
   const handleTouchMove = (e) => {
     if (!pullTouch.current.pulling) return;
-    const delta = e.touches[0].clientY - pullTouch.current.startY;
-    if (delta <= 0) { setPullDistance(0); return; }
+    const dy = e.touches[0].clientY - pullTouch.current.startY;
+    const dx = e.touches[0].clientX - pullTouch.current.startX;
+    if (!pullTouch.current.swiping && Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) {
+      pullTouch.current.swiping = true;
+      if (scrollContainerRef.current) scrollContainerRef.current.style.overflow = "hidden";
+    }
+    if (pullTouch.current.swiping) {
+      e.preventDefault();
+      setSwipeOffset(dx);
+      return;
+    }
+    if (dy <= 0) { setPullDistance(0); return; }
     e.preventDefault();
-    setPullDistance(Math.min(delta * 0.5, 100));
+    setPullDistance(Math.min(dy * 0.5, 100));
   };
 
-  const handleTouchEnd = () => {
+  const handleTouchEnd = (e) => {
     if (!pullTouch.current.pulling) return;
     pullTouch.current.pulling = false;
+    if (scrollContainerRef.current) scrollContainerRef.current.style.overflow = "";
+    if (pullTouch.current.swiping) {
+      pullTouch.current.swiping = false;
+      const dx = e.changedTouches[0].clientX - pullTouch.current.startX;
+      if (Math.abs(dx) > 50) {
+        const tabs = isAdmin ? adminTabs : userTabs;
+        const cur = isAdmin ? adminTab : userTab;
+        const idx = tabs.indexOf(cur);
+        if (idx !== -1) {
+          slideDir.current = dx > 0 ? -1 : 1;
+          setSwipeOffset(dx > 0 ? 500 : -500);
+          const target = dx > 0 ? tabs[Math.max(0, idx - 1)] : tabs[Math.min(tabs.length - 1, idx + 1)];
+          setTimeout(() => {
+            isAdmin ? setAdminTab(target) : setUserTab(target);
+            setSwipeOffset(0);
+          }, 200);
+        } else {
+          setSwipeOffset(0);
+        }
+      } else {
+        setSwipeOffset(0);
+      }
+      return;
+    }
     if (pullDistance > 50) handleRefresh();
     else setPullDistance(0);
   };
@@ -925,1651 +975,1655 @@ export default function App() {
       )}
       <div className="relative w-full text-white font-body text-outline selection:bg-white/20">
 
-      {toast && (
-        <div className="toast-msg glass-panel p-4 rounded-[1.25rem] flex items-center gap-3 bg-black/90 border border-white/25 shadow-2xl max-w-sm pointer-events-auto">
-          <div className="w-8 h-8 rounded-full flex items-center justify-center bg-white/10 text-white font-bold">
-            {toast.type === "error" ? "!" : "✓"}
+        {toast && (
+          <div className="toast-msg glass-panel p-4 rounded-[1.25rem] flex items-center gap-3 bg-black/90 border border-white/25 shadow-2xl max-w-sm pointer-events-auto">
+            <div className="w-8 h-8 rounded-full flex items-center justify-center bg-white/10 text-white font-bold">
+              {toast.type === "error" ? "!" : "✓"}
+            </div>
+            <p className="text-sm font-medium text-white/95 leading-tight">{toast.msg}</p>
           </div>
-          <p className="text-sm font-medium text-white/95 leading-tight">{toast.msg}</p>
-        </div>
-      )}
+        )}
 
-      {page === "splash" && !currentUser && !needsProfile && (
-        <>
-          <nav className="fixed top-4 left-0 w-full px-8 lg:px-16 z-50 flex items-center justify-between pointer-events-auto">
-            <button type="button" className="liquid-glass px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-full cursor-pointer select-none" onClick={() => scrollToSlide(0)}>
-              <span className="font-heading italic text-base sm:text-xl tracking-tight text-white uppercase font-bold">PREDIZONE</span>
-            </button>
-            <div className="hidden sm:flex liquid-glass px-1.5 py-1.5 rounded-full items-center gap-1 shadow-lg">
-              {["Welcome", "How to Play", "Teams", "Sponsors", "Join"].map((item, index) => (
-                <button key={item} className="px-4 py-1.5 text-xs uppercase tracking-wider text-white/80 hover:text-white font-medium transition-colors" onClick={() => scrollToSlide(index)}>{item}</button>
-              ))}
-            </div>
-            <button className="px-5 py-2.5 rounded-full bg-white text-black text-xs font-semibold uppercase tracking-wider hover:bg-white/90 transition-colors shadow-lg whitespace-nowrap flex items-center gap-1.5" onClick={() => scrollToSlide(4)}>
-              Enter Arena <ArrowUpRight className="h-3.5 w-3.5" />
-            </button>
-          </nav>
-
-          <div ref={containerRef} onScroll={handleScroll} className="scroll-container scroll-container--over-video">
-
-            <div className="scroll-section scroll-section--over-video scroll-section--hero">
-              <div className="scroll-slide-inner px-4 max-w-4xl text-center mx-auto w-full">
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: "easeOut", delay: 0.4 }}
-                  className="lg:mt-24 py-2 px-3 sm:py-1.5 sm:pl-1.5 sm:pr-4 rounded-full inline-flex items-center justify-center gap-2 sm:gap-3 text-xs mt-0 md:mt-0 mb-6 max-w-full mx-auto bg-red-950/40 border border-red-500/30 backdrop-blur-md shadow-lg flex-nowrap whitespace-nowrap">
-                  <span className="bg-white text-black px-2.5 py-1 rounded-full font-bold uppercase tracking-wider text-[10px] shrink-0">WC 2026</span>
-                  <span className="text-white/95 text-[11px] sm:text-xs leading-none font-medium tracking-wide">FIFA World Cup College Prediction Arena</span>
-                </motion.div>
-
-                <BlurText text="PREDICT MATCHES. WIN THE LEAGUE."
-                  className="text-4xl sm:text-5xl md:text-7xl lg:text-[5.5rem] font-heading italic text-white leading-[0.9] max-w-3xl justify-center tracking-[-2px] sm:tracking-[-3px] uppercase font-bold" />
-
-                <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: "easeOut", delay: 0.8 }}
-                  className="mt-6 text-sm md:text-base text-white/80 max-w-xl mx-auto font-light leading-relaxed">
-                  Predizone is your official FIFA World Cup 2026 prediction arena. Sign in, submit your picks for today&apos;s fixtures, earn points for correct winners and scorelines, and compete with students across campus.
-                </motion.p>
-
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: "easeOut", delay: 1.1 }}
-                  className="flex items-center justify-center gap-6 mt-8">
-                  <button className="liquid-glass-strong px-7 py-3 rounded-full text-xs uppercase tracking-wider font-semibold text-white flex items-center gap-2" onClick={() => scrollToSlide(4)}>
-                    Start Predicting <ArrowUpRight className="h-4 w-4" />
-                  </button>
-                  <button className="flex items-center gap-2 text-xs uppercase tracking-wider font-bold text-white hover:opacity-80 transition-opacity" onClick={() => scrollToSlide(1)}>
-                    <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center border border-white/20"><Play className="h-3 w-3 fill-current text-white" /></div> View Rules
-                  </button>
-                </motion.div>
-
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: "easeOut", delay: 1.3 }} className="mt-8 sm:mt-12 w-full max-w-3xl">
-                  <p className="text-[10px] sm:text-xs text-white/45 uppercase tracking-[0.2em] font-semibold mb-4">How it works</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 text-left mb-8 pb-8">
-                    {HERO_STEPS.map((step, i) => {
-                      const Icon = step.icon;
-                      return (
-                        <div key={step.title} className="liquid-glass p-3 sm:p-4 rounded-[1.25rem] border border-white/5">
-                          <div className="frozen-inner rounded-xl p-4 h-full">
-                            <div className="flex items-center gap-2.5 mb-3">
-                              <span className="frozen-tag w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-bold text-white/70">{i + 1}</span>
-                              <Icon className="h-5 w-5 text-white/90 shrink-0" />
-                            </div>
-                            <h3 className="font-heading italic text-xl text-white uppercase tracking-tight leading-none">{step.title}</h3>
-                            <p className="mt-2 text-[11px] sm:text-xs text-white/60 leading-relaxed font-light">{step.desc}</p>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </motion.div>
+        {page === "splash" && !currentUser && !needsProfile && (
+          <>
+            <nav className="fixed top-4 left-0 w-full px-8 lg:px-16 z-50 flex items-center justify-between pointer-events-auto">
+              <button type="button" className="liquid-glass px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-full cursor-pointer select-none" onClick={() => scrollToSlide(0)}>
+                <span className="font-heading italic text-base sm:text-xl tracking-tight text-white uppercase font-bold">PREDIZONE</span>
+              </button>
+              <div className="hidden sm:flex liquid-glass px-1.5 py-1.5 rounded-full items-center gap-1 shadow-lg">
+                {["Welcome", "How to Play", "Teams", "Sponsors", "Join"].map((item, index) => (
+                  <button key={item} className="px-4 py-1.5 text-xs uppercase tracking-wider text-white/80 hover:text-white font-medium transition-colors" onClick={() => scrollToSlide(index)}>{item}</button>
+                ))}
               </div>
-            </div>
+              <button className="px-5 py-2.5 rounded-full bg-white text-black text-xs font-semibold uppercase tracking-wider hover:bg-white/90 transition-colors shadow-lg whitespace-nowrap flex items-center gap-1.5" onClick={() => scrollToSlide(4)}>
+                Enter Arena <ArrowUpRight className="h-3.5 w-3.5" />
+              </button>
+            </nav>
 
-            <div className="scroll-section scroll-section--over-video scroll-section--predict">
-              <div className="predict-slide__inner relative z-10 px-4 sm:px-8 md:px-16 lg:px-20 flex flex-col w-full max-w-7xl mx-auto justify-start gap-5 md:gap-8">
-                <div className="text-left shrink-0">
-                  <h2 className="font-heading italic text-white text-4xl sm:text-5xl md:text-7xl lg:text-[5.5rem] leading-[0.9] tracking-[-3px] uppercase">OFFICIAL RULES</h2>
-                  <p className="mt-3 text-xs sm:text-sm text-white/55 uppercase tracking-widest font-semibold">Predizone tournament guidelines</p>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 w-full pb-20">
-                  {OFFICIAL_RULES.map((rule) => (
-                    <div key={rule.num} className="liquid-glass rounded-[1.25rem] p-4 sm:p-5 border border-white/5 hover:border-white/10 transition-colors flex flex-col gap-3">
-                      <div className="frozen-inner rounded-xl px-3 py-2.5 flex items-center gap-3">
-                        <span className="frozen-tag w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold text-white shrink-0">{rule.num}</span>
-                        <span className="text-[10px] uppercase tracking-[0.2em] text-white/45 font-bold">Rule {rule.num}</span>
-                      </div>
-                      <div className="frozen-inner rounded-xl p-4 flex-1">
-                        <p className="text-xs sm:text-[13px] text-white/75 leading-relaxed font-light">{rule.text}</p>
-                        {rule.bullets && (
-                          <ul className="mt-2.5 space-y-1.5">
-                            {rule.bullets.map((item) => (
-                              <li key={item} className="text-xs text-white/65 leading-relaxed font-light flex gap-2">
-                                <span className="text-white/35 shrink-0">•</span>
-                                <span>{item}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+            <div ref={containerRef} onScroll={handleScroll} className="scroll-container scroll-container--over-video">
 
-            <div className="scroll-section scroll-section--solid scroll-section--teams transition-colors duration-[650ms]" style={{ backgroundColor: TEAMS[activeIndex].bg }}>
-              <div className="absolute inset-0 pointer-events-none z-50 opacity-40 bg-[url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22><filter id=%22noise%22><feTurbulence type=%22fractalNoise%22 baseFrequency=%220.9%22 numOctaves=%224%22 stitchTiles=%22stitch%22/></filter><rect width=%22200%22 height=%22200%22 filter=%22url(%23noise)%22 opacity=%220.08%22/></svg>')] bg-repeat" />
-              <div className="teams-slide__shell">
-                <div className="teams-slide__header">
-                  <span className="text-[10px] font-bold tracking-[0.2em] text-white/80 uppercase">TEAM JERSEYS · {activeIndex + 1} / {TEAMS.length}</span>
-                  <button className="sm:hidden flex items-center gap-1 text-white/80 hover:text-white text-[10px] font-bold uppercase tracking-widest transition-colors" onClick={() => scrollToSlide(3)}>
-                    Sponsors <ArrowRight className="h-3 w-3" />
-                  </button>
-                  <button className="hidden sm:flex items-center gap-1 text-white hover:opacity-85 transition-opacity" onClick={() => scrollToSlide(3)}>
-                    <span className="font-heading uppercase font-normal tracking-tight leading-none text-2xl" style={{ fontFamily: "'Anton', sans-serif" }}>DISCOVER SPONSORS</span>
-                    <ArrowRight className="h-5 w-5" />
-                  </button>
-                </div>
+              <div className="scroll-section scroll-section--over-video scroll-section--hero">
+                <div className="scroll-slide-inner px-4 max-w-4xl text-center mx-auto w-full">
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: "easeOut", delay: 0.4 }}
+                    className="lg:mt-24 py-2 px-3 sm:py-1.5 sm:pl-1.5 sm:pr-4 rounded-full inline-flex items-center justify-center gap-2 sm:gap-3 text-xs mt-0 md:mt-0 mb-6 max-w-full mx-auto bg-red-950/40 border border-red-500/30 backdrop-blur-md shadow-lg flex-nowrap whitespace-nowrap">
+                    <span className="bg-white text-black px-2.5 py-1 rounded-full font-bold uppercase tracking-wider text-[10px] shrink-0">WC 2026</span>
+                    <span className="text-white/95 text-[11px] sm:text-xs leading-none font-medium tracking-wide">FIFA World Cup College Prediction Arena</span>
+                  </motion.div>
 
-                <div className="teams-slide__stage">
-                  <div className="contenders-bg absolute inset-x-0 flex items-center justify-center pointer-events-none select-none z-[2] font-heading font-black opacity-30 text-white tracking-tight leading-none text-center">
-                    <span className="font-heading font-bold" style={{ fontSize: "clamp(64px, 22vw, 380px)", fontFamily: "'Anton', sans-serif" }}>CONTENDERS</span>
-                  </div>
-                  <div className="jersey-carousel jersey-carousel--swipeable z-[3]" onTouchStart={handleJerseyTouchStart} onTouchEnd={handleJerseyTouchEnd}>
-                    {TEAMS.map((entry, i) => {
-                      const roleStyle = getRoleStyle(i);
-                      const isNear = Math.abs(((i - activeIndex + TEAMS.length) % TEAMS.length)) <= 2 ||
-                                     Math.abs(((i - activeIndex + TEAMS.length) % TEAMS.length) - TEAMS.length) <= 2;
-                      return (
-                        <div key={entry.name}
-                          className={`jersey-carousel__slide absolute left-1/2 origin-center${i === activeIndex ? " jersey-carousel__slide--active" : ""}`}
-                          style={{
-                            ...roleStyle, aspectRatio: "0.72 / 1",
-                            transition: roleStyle.display !== "none" ? "transform 650ms cubic-bezier(0.4,0,0.2,1), opacity 650ms cubic-bezier(0.4,0,0.2,1)" : "none",
-                            willChange: roleStyle.display !== "none" ? "transform, opacity" : "auto"
-                          }}>
-                          <span className="jersey-carousel__shadow" aria-hidden="true" />
-                          <img src={entry.jersey} alt={`${entry.name} jersey`}
-                            className="relative z-[1] w-full h-full object-contain object-center select-none"
-                            draggable="false"
-                            loading={isNear ? "eager" : "lazy"}
-                            onError={(e) => { if (e.currentTarget.src !== JERSEY_PLACEHOLDER) e.currentTarget.src = JERSEY_PLACEHOLDER; }} />
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+                  <BlurText text="PREDICT MATCHES. WIN THE LEAGUE."
+                    className="text-4xl sm:text-5xl md:text-7xl lg:text-[5.5rem] font-heading italic text-white leading-[0.9] max-w-3xl justify-center tracking-[-2px] sm:tracking-[-3px] uppercase font-bold" />
 
-                <div className="teams-slide__footer jersey-carousel__footer sm:max-w-[320px] text-left">
-                  <div className="flex items-center justify-between sm:block gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 mb-1 sm:mb-2">
-                        <span className="text-xl sm:text-2xl shrink-0">{fl(TEAMS[activeIndex].name)}</span>
-                        <h3 className="font-semibold uppercase tracking-widest text-sm sm:text-[22px] text-white leading-tight truncate">{TEAMS[activeIndex].team}</h3>
-                      </div>
-                      <p className="text-[10px] sm:text-xs text-white/70 leading-relaxed font-light mb-0 sm:mb-5">Group {TEAMS[activeIndex].group} · WC 2026</p>
-                    </div>
-                    <div className="hidden sm:flex items-center gap-3 shrink-0">
-                      <button className="w-16 h-16 rounded-full border-2 border-white flex items-center justify-center text-white hover:scale-105 hover:bg-white/10 transition-all active:scale-95" onClick={() => navigateTeams("prev")} aria-label="Previous team">
-                        <ArrowLeft className="h-6 w-6" />
-                      </button>
-                      <button className="w-16 h-16 rounded-full border-2 border-white flex items-center justify-center text-white hover:scale-105 hover:bg-white/10 transition-all active:scale-95" onClick={() => navigateTeams("next")} aria-label="Next team">
-                        <ArrowRight className="h-6 w-6" />
-                      </button>
-                    </div>
-                    <p className="sm:hidden text-[10px] text-white/45 uppercase tracking-widest shrink-0">Swipe to browse</p>
-                  </div>
-                </div>
-              </div>
-            </div>
+                  <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: "easeOut", delay: 0.8 }}
+                    className="mt-6 text-sm md:text-base text-white/80 max-w-xl mx-auto font-light leading-relaxed">
+                    Predizone is your official FIFA World Cup 2026 prediction arena. Sign in, submit your picks for today&apos;s fixtures, earn points for correct winners and scorelines, and compete with students across campus.
+                  </motion.p>
 
-            <div className="scroll-section scroll-section--over-video scroll-section--sponsors">
-              <div className="sponsors-slide__inner relative z-10 px-6 max-w-4xl text-center w-full flex flex-col items-center justify-center gap-4 mx-auto">
-                <h2 className="font-heading italic text-white text-5xl md:text-7xl lg:text-[5.5rem] leading-[0.9] tracking-[-3px] uppercase mb-3 sm:mb-4">PROUD SPONSORS</h2>
-                <p className="text-white/50 text-xs uppercase tracking-widest mb-6 sm:mb-12 font-semibold">Backed by campus organizations and local businesses</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 w-full max-w-xl mx-auto">
-                  {SPONSORS.map((sp) => (
-                    <div key={sp.label} className="liquid-glass rounded-[1.25rem] p-4 sm:p-5 text-center border border-white/5">
-                      <div className="frozen-inner rounded-xl p-4 sm:p-5 flex flex-col items-center gap-3 sm:gap-4 h-full">
-                        <div className="w-full h-24 sm:h-32 rounded-xl frozen-inner flex items-center justify-center p-3 sm:p-4 relative overflow-hidden group">
-                          <div className="absolute inset-0 bg-gradient-to-tr from-white/0 to-white/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-                          <img src={sp.logo} alt={`${sp.name} logo`} className="h-full max-h-16 sm:max-h-24 object-contain filter brightness-100 contrast-100 transition-transform duration-300 group-hover:scale-105 select-none" draggable="false" />
-                        </div>
-                        <div className="frozen-tag px-4 py-1.5 rounded-full text-white font-bold tracking-widest text-[11px] uppercase inline-block">{sp.label}</div>
-                        <div className="flex flex-col gap-1">
-                          <h4 className="text-sm font-semibold text-white/95 leading-tight">{sp.name}</h4>
-                          <p className="text-[11px] text-white/45">{sp.desc}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <button className="btn-primary mt-6 sm:mt-12 px-7 py-3 rounded-full text-xs uppercase tracking-wider font-semibold" onClick={() => scrollToSlide(4)}>Go To Portal</button>
-              </div>
-            </div>
-
-            <div className="scroll-section scroll-section--over-video scroll-section--dimmed">
-              <div className="scroll-slide-inner px-4 w-full justify-between">
-                <div className="flex-1 flex items-center justify-center w-full min-h-0 py-4">
-                  <div className="liquid-glass-strong p-8 w-full max-w-md rounded-[1.25rem] border border-white/10 shadow-2xl flex flex-col items-center">
-                    <div className="text-center mb-8">
-                      <div className="frozen-inner w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                        <Award className="h-7 w-7 text-white" />
-                      </div>
-                      <h3 className="font-heading italic text-white text-3xl tracking-tight uppercase">SECURE SIGN IN</h3>
-                      <p className="text-white/50 text-[11px] uppercase tracking-wider mt-1.5">Authenticate via Google to lock in your predictions</p>
-                    </div>
-
-                    <button
-                      className="btn-primary w-full py-3 rounded-full text-sm font-bold uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-50"
-                      onClick={handleGoogleSignIn}
-                      disabled={signingIn}
-                    >
-                      {signingIn ? (
-                        <div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />
-                      ) : (
-                        <svg className="h-5 w-5" viewBox="0 0 24 24"><path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" /><path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" /><path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" /><path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" /></svg>
-                      )}
-                      {signingIn ? "Signing in..." : "Continue with Google"}
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: "easeOut", delay: 1.1 }}
+                    className="flex items-center justify-center gap-6 mt-8">
+                    <button className="liquid-glass-strong px-7 py-3 rounded-full text-xs uppercase tracking-wider font-semibold text-white flex items-center gap-2" onClick={() => scrollToSlide(4)}>
+                      Start Predicting <ArrowUpRight className="h-4 w-4" />
                     </button>
+                    <button className="flex items-center gap-2 text-xs uppercase tracking-wider font-bold text-white hover:opacity-80 transition-opacity" onClick={() => scrollToSlide(1)}>
+                      <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center border border-white/20"><Play className="h-3 w-3 fill-current text-white" /></div> View Rules
+                    </button>
+                  </motion.div>
 
-                    <div className="frozen-inner rounded-xl p-3.5 text-left text-[11px] text-white/60 leading-relaxed w-full mt-4">
-                      🛡️ <strong>Secure &amp; Private:</strong> Google Sign-In ensures only you can access your predictions — no passwords stored.
-                    </div>
-                  </div>
-                </div>
-
-                <footer className="splash-footer shrink-0 w-full text-center pt-4">
-                  <p className="text-[10px] text-white/35 tracking-wide mb-2">say hi to me</p>
-                  <div className="flex items-center justify-center gap-4">
-                    <a href={CREATOR_LINKS.linkedin} target="_blank" rel="noopener noreferrer" className="text-white/30 hover:text-white/70 transition-colors" aria-label="LinkedIn">
-                      <IconLinkedIn className="h-3.5 w-3.5" />
-                    </a>
-                    <a href={CREATOR_LINKS.email} className="text-white/30 hover:text-white/70 transition-colors" aria-label="Email">
-                      <Mail className="h-3.5 w-3.5" strokeWidth={1.5} />
-                    </a>
-                    <a href={CREATOR_LINKS.github} target="_blank" rel="noopener noreferrer" className="text-white/30 hover:text-white/70 transition-colors" aria-label="GitHub">
-                      <IconGitHub className="h-3.5 w-3.5" />
-                    </a>
-                    <a href={CREATOR_LINKS.instagram} target="_blank" rel="noopener noreferrer" className="text-white/30 hover:text-white/70 transition-colors" aria-label="Instagram">
-                      <IconInstagram className="h-3.5 w-3.5" />
-                    </a>
-                  </div>
-                </footer>
-              </div>
-            </div>
-
-          </div>
-        </>
-      )}
-
-      {needsProfile && pendingAuthUser && (
-        <div className="fixed inset-0 z-[999] flex items-start sm:items-center justify-center p-4 overflow-y-auto" style={{ background: "rgba(0,0,0,0.92)", backdropFilter: "blur(18px)" }}>
-          <div className="w-full max-w-md my-4">
-            <div className="liquid-glass-strong rounded-[1.5rem] border border-white/15 shadow-2xl overflow-hidden">
-              <div className="bg-gradient-to-r from-green-900/60 to-emerald-900/40 border-b border-white/10 px-8 pt-8 pb-6 text-center">
-                {pendingAuthUser.user_metadata?.avatar_url ? (
-                  <img src={pendingAuthUser.user_metadata.avatar_url} alt="Profile" className="w-20 h-20 rounded-full border-4 border-white/20 mx-auto mb-4 shadow-xl" />
-                ) : (
-                  <div className="w-20 h-20 rounded-full bg-white/10 border border-white/20 flex items-center justify-center mx-auto mb-4">
-                    <User className="h-8 w-8 text-white" />
-                  </div>
-                )}
-                <div className="inline-flex items-center gap-1.5 bg-green-500/20 border border-green-500/30 px-3 py-1 rounded-full mb-3">
-                  <CheckCircle className="h-3 w-3 text-green-400" />
-                  <span className="text-green-400 text-[10px] font-bold uppercase tracking-widest">Google Verified</span>
-                </div>
-                <h2 className="font-heading italic text-white text-2xl uppercase tracking-tight leading-tight">One Last Step</h2>
-                <p className="text-white/50 text-xs mt-1">
-                  Hey <span className="text-white font-semibold">{pendingAuthUser.user_metadata?.full_name?.split(" ")[0] || "there"}</span>, complete your campus profile to enter the arena.
-                </p>
-              </div>
-              <div className="px-8 py-6 space-y-4">
-                <div>
-                  <label className="block text-[10px] font-bold text-white/70 uppercase tracking-widest mb-1.5">Full Name</label>
-                  <input className="input-glass w-full px-4 py-3 rounded-xl text-sm" placeholder="e.g. Rahul Sharma"
-                    value={registerName} onChange={e => setRegisterName(e.target.value)}
-                    onKeyDown={e => e.key === "Enter" && document.getElementById("reg-dept")?.focus()} />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-white/70 uppercase tracking-widest mb-1.5">Department</label>
-                  <input id="reg-dept" className="input-glass w-full px-4 py-3 rounded-xl text-sm" placeholder="e.g. Computer Science"
-                    value={registerDept} onChange={e => setRegisterDept(e.target.value)}
-                    onKeyDown={e => e.key === "Enter" && handleCompleteRegistration()} />
-                  <p className="text-[9px] text-white/35 mt-1 pl-1">Type your full department name</p>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-white/70 uppercase tracking-widest mb-1.5">Year of Study</label>
-                  <div className="grid grid-cols-4 gap-2">
-                    {STUDY_YEARS.map(y => (
-                      <button key={y}
-                        className={`py-2.5 rounded-xl text-xs font-bold uppercase border transition-all ${registerYear === y ? "bg-white text-black border-white" : "bg-white/5 border-white/10 text-white/60 hover:text-white hover:border-white/30"}`}
-                        onClick={() => setRegisterYear(y)}>
-                        {y.replace(" Year", "")}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <button className="btn-primary w-full py-3.5 rounded-full text-sm font-bold uppercase tracking-widest mt-2 flex items-center justify-center gap-2" onClick={handleCompleteRegistration}>
-                  <CheckCircle className="h-4 w-4" />
-                  Complete & Enter Arena
-                </button>
-                <button className="text-[10px] text-white/30 uppercase tracking-widest block mx-auto text-center hover:text-white/60 transition-colors" onClick={() => { setNeedsProfile(false); handleLogout(); }}>
-                  ← Back to Sign In
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-
-      {currentUser && !needsProfile && (
-        <div className="max-w-3xl mx-auto px-4 h-screen flex flex-col pt-4 relative z-10 no-scrollbar">
-          <header className="liquid-glass rounded-[1.25rem] border border-white/10 mb-2 shrink-0">
-            <div className="flex items-center justify-between p-4">
-              <div className="flex items-center gap-2 select-none">
-                <span className="text-xl">🏆</span>
-                <span className="font-heading italic text-xl tracking-tight text-white uppercase font-bold">PREDIZONE</span>
-              </div>
-              <div className="flex items-center">
-                {!isAdmin && (
-                  <button className="p-2 rounded-lg text-white/40 hover:text-white/80 transition-colors" onClick={() => setIsMuted(v => !v)} title={isMuted ? "Unmute" : "Mute"}>
-                    {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-                  </button>
-                )}
-                <button className="p-2 rounded-lg text-red-400 hover:bg-white/5 transition-colors" onClick={handleLogout} title="Logout">
-                  <LogOut className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-            <div className="flex gap-1 px-3 pb-3 overflow-x-auto no-scrollbar">
-              {!isAdmin ? (
-                <>
-                  <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "fixtures" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => setUserTab("fixtures")}>
-                    <Target className="h-3 w-3 inline mr-1" />Predict
-                  </button>
-                  <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "stream" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => setUserTab("stream")}>
-                    <span className={userTab !== "stream" ? "blink-pulse" : ""}><Tv className="h-3 w-3 inline mr-1" />Stream</span>
-                  </button>
-                  <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "upcoming" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => setUserTab("upcoming")}>
-                    <Calendar className="h-3 w-3 inline mr-1" />All
-                  </button>
-                  <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "finished" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => setUserTab("finished")}>
-                    <CheckCircle className="h-3 w-3 inline mr-1" />Finished
-                  </button>
-                  <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "leaderboard" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => setUserTab("leaderboard")}>
-                    <Trophy className="h-3 w-3 inline mr-1" />Standings
-                  </button>
-                  <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "you" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => setUserTab("you")}>
-                    <User className="h-3 w-3 inline mr-1" />You
-                  </button>
-                </>
-              ) : (
-                <span className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white/60">Admin Console</span>
-              )}
-            </div>
-            <p className="text-[9px] text-white/20 text-center mt-2 sm:hidden select-none">swipe →</p>
-          </header>
-          <audio ref={audioRef} src={BG_MUSIC_SRC} loop autoPlay />
-          <div ref={scrollContainerRef} className="flex-1 overflow-y-auto no-scrollbar flex flex-col pb-safe" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
-
-            {pullDistance > 0 && (
-              <div className="flex items-center justify-center py-2 transition-all duration-100" style={{ opacity: Math.min(pullDistance / 50, 1), transform: `translateY(${pullDistance * 0.5}px)` }}>
-                <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full" />
-              </div>
-            )}
-
-            {!isAdmin && (
-              <div className="liquid-glass px-5 py-6 sm:px-6 sm:py-8 rounded-[1.25rem] border border-white/5 mb-6 min-h-[100px] md:min-h-[110px] overflow-hidden cursor-pointer" onClick={() => setUserTab("you")}>
-                <div className="flex flex-row items-center gap-3 sm:gap-0 sm:justify-between">
-                  <div className="flex items-center gap-3 text-left min-w-0 flex-shrink">
-                    {currentUser.photoURL ? (
-                      <img src={currentUser.photoURL} alt={currentUser.name} className="w-10 h-10 rounded-full border border-white/20 shrink-0" />
-                    ) : (
-                      <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center border border-white/15 shrink-0"><User className="h-4 w-4 text-white" /></div>
-                    )}
-                    <div className="min-w-0">
-                      <h3 className="text-sm font-semibold text-white/95 flex items-center gap-1 truncate">{currentUser.favoriteTeam && <span className="text-base">{fl(currentUser.favoriteTeam)}</span>}{currentUser.name} <Zap className="h-3.5 w-3.5 text-amber-400 fill-current shrink-0" /></h3>
-                      <span className="text-[10px] text-white/40 uppercase tracking-widest mt-0.5 block truncate">{currentUser.dept} • {currentUser.year || "1st Year"} • {currentUser.email}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 sm:gap-4 shrink-0">
-                    {isLockedGlobal && <div className="bg-amber-950/60 border border-amber-800/50 px-3 py-1 rounded-full shrink-0"><Lock className="h-3 w-3 inline text-amber-400 mr-1" /><span className="text-amber-400 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">Predictions Locked</span></div>}
-                    <div className="text-left sm:text-right shrink-0">
-                      <span className="text-[10px] text-white/50 uppercase tracking-widest block mb-0.5">Your Points</span>
-                      <span className="font-heading italic text-2xl text-white tracking-tight">{leaderboard.find(l => l.id === currentUser.id)?.points || 0} PTS</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ─── USER: Fixtures / Predict ─── */}
-            {userTab === "fixtures" && !isAdmin && (() => {
-              const openFixtures = sortedFixtures.filter(f => {
-                const s = getStatus(f, isLockedGlobal);
-                return (s === "open" || (s === "played" && !results[f.id])) && !results[f.id];
-              });
-              return (
-              <div className="space-y-4">
-                <div className="text-left mb-6">
-                  <h2 className="font-heading italic text-3xl uppercase tracking-tight text-white">OPEN PREDICTIONS</h2>
-                  <p className="text-xs text-white/50 mt-1 uppercase tracking-wider">{openFixtures.length} matches available</p>
-                </div>
-
-                {openFixtures.length > 0 ? openFixtures.map(fix => {
-                  const status = getStatus(fix, isLockedGlobal);
-                  const key = `${currentUser.id}_${fix.id}`;
-                  const myPred = predictions[key];
-                  const res = results[fix.id];
-                  const pts = myPred && res ? calcPoints(myPred, res, fix) : null;
-                  const canPredict = status === "open" && !myPred;
-                  const isGold = currentUser?.favoriteTeam && (fix.home === currentUser.favoriteTeam || fix.away === currentUser.favoriteTeam);
-                  return (
-                    <div key={fix.id} className={`liquid-glass p-6 rounded-[1.5rem] border ${isGold ? "card-gold" : "border-white/10"} text-center`}>
-                      <div className="flex justify-between items-center mb-4">
-                        <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest">{fix.isKnockout ? fix.round : `Group ${fix.group}`}</span>
-                        <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${status === "open" ? "bg-green-950 text-green-400 border border-green-800" : status === "played" ? "bg-blue-950 text-blue-400 border border-blue-800" : "bg-amber-950/80 text-amber-400 border border-amber-900"}`}>{status}</span>
-                      </div>
-                      <div className="flex items-center justify-between my-6 max-w-sm mx-auto w-full">
-                        <div className="text-center flex-1">
-                          <span className="text-5xl block mb-2">{fl(fix.home)}</span>
-                          <span className="text-sm font-semibold text-white/90">{fix.home}</span>
-                        </div>
-                        <div className="flex flex-col items-center px-4">
-                          <span className="font-heading italic text-lg text-white/30 uppercase tracking-widest">VS</span>
-                          <span className="text-[10px] text-white/30 mt-2">{new Date(fix.date).toLocaleDateString("en-IN", { weekday: "short" })}</span>
-                        </div>
-                        <div className="text-center flex-1">
-                          <span className="text-5xl block mb-2">{fl(fix.away)}</span>
-                          <span className="text-sm font-semibold text-white/90">{fix.away}</span>
-                        </div>
-                      </div>
-                      <p className="text-[10px] text-white/40 mb-5">{formatDate(fix.date)} &nbsp;•&nbsp; {fix.venue}</p>
-
-                      {res ? (
-                        <div className="relative frozen-inner rounded-xl p-4 max-w-xs mx-auto">
-                          <div className="flex items-center justify-center gap-6 mb-2">
-                            <div className={`text-center relative ${res.winner === fix.home ? "scale-110" : "opacity-60"}`}>
-                              <span className="text-4xl block mb-1">{fl(fix.home)}</span>
-                              <span className="text-[10px] font-semibold text-white/90 block">{fix.home}</span>
-                              {res.winner === fix.home && (
-                                <>
-                                  {[...Array(6)].map((_, i) => (
-                                    <div key={`c${i}`} className="confetti-piece" style={{
-                                      left: `${10 + i * 14}%`, top: `${10 + (i % 2) * 30}%`,
-                                      background: `hsl(${i * 60}, 80%, 60%)`,
-                                      animationDelay: `${i * 0.15}s`,
-                                    }} />
-                                  ))}
-                                  {[...Array(4)].map((_, i) => (
-                                    <div key={`f${i}`} className="firecracker" style={{
-                                      left: `${30 + i * 14}%`, top: `${5 + i * 8}%`,
-                                      background: `hsl(${i * 90 + 20}, 90%, 60%)`,
-                                      animationDelay: `${i * 0.2}s`,
-                                    }} />
-                                  ))}
-                                </>
-                              )}
-                            </div>
-                            <div className="text-center font-heading italic text-2xl text-white">
-                              {res.homeGoals ?? "?"}–{res.awayGoals ?? "?"}
-                            </div>
-                            <div className={`text-center relative ${res.winner === fix.away ? "scale-110" : "opacity-60"}`}>
-                              <span className="text-4xl block mb-1">{fl(fix.away)}</span>
-                              <span className="text-[10px] font-semibold text-white/90 block">{fix.away}</span>
-                              {res.winner === fix.away && (
-                                <>
-                                  {[...Array(6)].map((_, i) => (
-                                    <div key={`c${i}`} className="confetti-piece" style={{
-                                      left: `${10 + i * 14}%`, top: `${10 + (i % 2) * 30}%`,
-                                      background: `hsl(${i * 60 + 30}, 80%, 60%)`,
-                                      animationDelay: `${i * 0.15}s`,
-                                    }} />
-                                  ))}
-                                  {[...Array(4)].map((_, i) => (
-                                    <div key={`f${i}`} className="firecracker" style={{
-                                      left: `${30 + i * 14}%`, top: `${5 + i * 8}%`,
-                                      background: `hsl(${i * 90 + 50}, 90%, 60%)`,
-                                      animationDelay: `${i * 0.2}s`,
-                                    }} />
-                                  ))}
-                                </>
-                              )}
-                            </div>
-                          </div>
-                          {pts !== null && (
-                            <div className="text-center mb-2">
-                              <span className={`font-semibold px-3 py-1 rounded-full text-xs ${pts > 0 ? "bg-green-950 text-green-400" : "frozen-tag text-white/40"}`}>{pts > 0 ? `+${pts} PTS` : "0 PTS"}</span>
-                            </div>
-                          )}
-                          {(() => {
-                            const stats = getFixturePredictionStats(fix.id, predictions, fix.home, fix.away);
-                            if (!stats || stats.bars.length === 0) return null;
-                            return (
-                              <div className="mt-3 pt-3 border-t border-white/10">
-                                <p className="text-[9px] text-white/40 uppercase tracking-wider text-center mb-2">Prediction Distribution</p>
-                                <div className="space-y-1.5">
-                                  {stats.bars.map((bar, bi) => (
-                                    <div key={`${bar.team}-${bi}`} className="flex items-center gap-2">
-                                      <span className="text-[8px] text-white/50 w-10 text-right leading-tight truncate shrink-0">{bar.team === fix.home ? fix.home : bar.team === fix.away ? fix.away : "Draw"}</span>
-                                      <div className="flex-1 h-4 rounded-full bg-white/5 overflow-hidden">
-                                        <div className="h-full rounded-full transition-all duration-500" style={{
-                                          width: `${bar.pct}%`,
-                                          background: bar.team === fix.home ? "#22c55e" : bar.team === fix.away ? "#3b82f6" : "#ffffff",
-                                        }} />
-                                      </div>
-                                      <span className="text-[9px] font-bold text-white/70 w-8 text-left shrink-0">{bar.pct}%</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      ) : status === "played" ? (
-                        <div className="frozen-inner rounded-xl p-4 max-w-xs mx-auto">
-                          {(() => {
-                            const stats = getFixturePredictionStats(fix.id, predictions, fix.home, fix.away);
-                            if (!stats || stats.bars.length === 0) return <p className="text-[10px] text-white/40 text-center">No predictions yet</p>;
-                            return (
-                              <div>
-                                <p className="text-[9px] text-white/40 uppercase tracking-wider text-center mb-3">Prediction Distribution</p>
-                                <div className="space-y-1.5">
-                                  {stats.bars.map((bar, bi) => (
-                                    <div key={`${bar.team}-${bi}`} className="flex items-center gap-2">
-                                      <span className="text-[8px] text-white/50 w-10 text-right leading-tight truncate shrink-0">{bar.team === fix.home ? fix.home : bar.team === fix.away ? fix.away : "Draw"}</span>
-                                      <div className="flex-1 h-4 rounded-full bg-white/5 overflow-hidden">
-                                        <div className="h-full rounded-full transition-all duration-500" style={{
-                                          width: `${bar.pct}%`,
-                                          background: bar.team === fix.home ? "#22c55e" : bar.team === fix.away ? "#3b82f6" : "#ffffff",
-                                        }} />
-                                      </div>
-                                      <span className="text-[9px] font-bold text-white/70 w-8 text-left shrink-0">{bar.pct}%</span>
-                                    </div>
-                                  ))}
-                                </div>
-                                <p className="text-[9px] text-white/30 text-center mt-2">{stats.total} total predictions</p>
-                              </div>
-                            );
-                          })()}
-                          {myPred ? (
-                            <div className="mt-3 pt-2 border-t border-white/10 text-center">
-                              <span className="text-[9px] text-white/50 uppercase tracking-wider">Your prediction: </span>
-                              <span className="text-[10px] font-semibold text-white">{formatPredictionSummary(myPred, fix)}</span>
-                            </div>
-                          ) : (
-                            <div className="mt-3 pt-2 border-t border-white/10 text-center">
-                              <span className="text-[9px] text-white/40 italic">You didn't predict this match</span>
-                            </div>
-                          )}
-                        </div>
-                      ) : null}
-
-                      {!res && status !== "played" && myPred && (
-                        <div className="frozen-inner rounded-xl p-4 text-sm max-w-xs mx-auto">
-                          <span className="text-white/50 text-xs">Your prediction: </span>
-                          <span className="font-semibold text-white">{formatPredictionSummary(myPred, fix)}</span>
-                          <span className="text-[10px] text-white/40 font-bold uppercase tracking-wider ml-2">🔒 Locked</span>
-                        </div>
-                      )}
-
-                      {canPredict && (
-                        <button className="btn-primary px-10 py-3 rounded-full text-sm font-bold uppercase tracking-wider" onClick={() => { setPredFixture(fix); setPredWinner(""); setPredHomeGoals(""); setPredAwayGoals(""); }}>
-                          Make Prediction
-                        </button>
-                      )}
-
-                      {status === "locked" && !myPred && (
-                        <div className="frozen-inner rounded-xl p-4 text-xs text-white/50 max-w-xs mx-auto flex items-center gap-2 justify-center">
-                          <Lock className="h-3 w-3" /> Predictions open 24h before match, lock 30min before kickoff
-                        </div>
-                      )}
-                    </div>
-                  );
-                }) : (
-                  <div className="liquid-glass rounded-[1.5rem] p-12 text-center border border-white/5">
-                    <span className="text-5xl mb-4 block">📅</span>
-                    <h3 className="font-heading italic text-2xl text-white/70">No Matches Available</h3>
-                    <p className="text-xs text-white/40 max-w-sm mx-auto mt-3 leading-relaxed">No fixtures scheduled. Check the upcoming tab for future matches.</p>
-                    <button className="btn-secondary mt-6 px-6 py-2.5 rounded-full text-xs font-semibold uppercase tracking-wider" onClick={() => setUserTab("upcoming")}>View Upcoming</button>
-                  </div>
-                )}
-              </div>
-              );
-            })()}
-
-            {/* ─── USER: Stream Poll ─── */}
-            {userTab === "stream" && !isAdmin && (() => {
-              const myResponse = currentUser ? streamResponses[currentUser.id] : null;
-              const yesCount = Object.values(streamResponses).filter(r => r.response === "yes").length;
-              const noCount = Object.values(streamResponses).filter(r => r.response === "no").length;
-              const total = yesCount + noCount;
-              return (
-                <div className="space-y-4">
-                  <div className="text-left mb-6">
-                    <h2 className="font-heading italic text-3xl uppercase tracking-tight text-white">LIVE STREAM</h2>
-                    <p className="text-xs text-white/50 mt-1 uppercase tracking-wider">Would you like live streaming of matches here?</p>
-                  </div>
-                  <div className="liquid-glass p-6 rounded-xl border border-white/5 text-center">
-                    {currentUser && !myResponse ? (
-                      <>
-                        <h3 className="font-heading italic text-xl text-white mb-6">Would you like live streaming of World Cup matches here?</h3>
-                        <div className="flex gap-4 justify-center">
-                          <button className="btn-primary px-8 py-3 rounded-full text-sm uppercase tracking-widest font-bold bg-green-600 hover:bg-green-500" onClick={async () => { try { await submitStreamResponse(currentUser.id, "yes"); setStreamResponses(prev => ({ ...prev, [currentUser.id]: { user_id: currentUser.id, response: "yes", submitted_at: new Date().toISOString() } })); } catch (e) { showToast("Failed to submit vote", "error"); } }}>
-                            Yes
-                          </button>
-                          <button className="btn-primary px-8 py-3 rounded-full text-sm uppercase tracking-widest font-bold bg-red-600 hover:bg-red-500" onClick={async () => { try { await submitStreamResponse(currentUser.id, "no"); setStreamResponses(prev => ({ ...prev, [currentUser.id]: { user_id: currentUser.id, response: "no", submitted_at: new Date().toISOString() } })); } catch (e) { showToast("Failed to submit vote", "error"); } }}>
-                            No
-                          </button>
-                        </div>
-                      </>
-                    ) : (
-                      <div>
-                        <h3 className="font-heading italic text-lg text-white mb-2">You voted: <span className={myResponse?.response === "yes" ? "text-green-400" : "text-red-400"}>{myResponse?.response === "yes" ? "Yes" : "No"}</span></h3>
-                        {total > 0 && (
-                          <div className="w-full bg-white/10 rounded-full h-4 mt-4 overflow-hidden flex">
-                            <div className="bg-green-500 h-full transition-all" style={{ width: `${(yesCount / total) * 100}%` }} />
-                            <div className="bg-red-500 h-full transition-all" style={{ width: `${(noCount / total) * 100}%` }} />
-                          </div>
-                        )}
-                        <div className="flex justify-center gap-8 mt-4 text-sm">
-                          <span className="text-green-400 font-semibold">{yesCount} Yes ({total > 0 ? Math.round((yesCount / total) * 100) : 0}%)</span>
-                          <span className="text-red-400 font-semibold">{noCount} No ({total > 0 ? Math.round((noCount / total) * 100) : 0}%)</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  <p className="text-[9px] text-white/30 text-center">One vote per person. Results will reset after 12 hours.</p>
-                </div>
-              );
-            })()}
-
-            {/* ─── USER: All Fixtures ─── */}
-            {userTab === "upcoming" && !isAdmin && (
-              <div className="space-y-4">
-                <div className="text-left mb-6">
-                  <h2 className="font-heading italic text-3xl uppercase tracking-tight text-white">ALL FIXTURES</h2>
-                  <p className="text-xs text-white/50 mt-1 uppercase tracking-wider">{upcomingFiltered.length} matches</p>
-                </div>
-                {upcomingFiltered.length === 0 ? (
-                  <div className="liquid-glass rounded-[1.5rem] p-12 text-center border border-white/5">
-                    <span className="text-4xl mb-4 block">📅</span>
-                    <h3 className="font-heading italic text-xl text-white/70">No Fixtures</h3>
-                    <p className="text-xs text-white/40 max-w-sm mx-auto mt-2">No matches have been added yet.</p>
-                  </div>
-                ) : (
-                  upcomingFiltered.map(fix => {
-                    const status = getStatus(fix, isLockedGlobal);
-                    const key = `${currentUser.id}_${fix.id}`;
-                    const myPred = predictions[key];
-                    const res = results[fix.id];
-                    const pts = res && myPred ? calcPoints(myPred, res, fix) : null;
-                    const isGold = currentUser?.favoriteTeam && (fix.home === currentUser.favoriteTeam || fix.away === currentUser.favoriteTeam);
-                    return (
-                      <div key={fix.id} className={`liquid-glass p-4 rounded-xl border ${isGold ? "card-gold" : "border-white/5"} flex items-center justify-between text-left`}>
-                        <div className="flex items-center gap-4 flex-1">
-                          <div className="text-center min-w-[50px]">
-                            <span className="text-xs font-semibold text-white/70 block">{new Date(fix.date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</span>
-                            <span className="text-[9px] text-white/40">{new Date(fix.date).toLocaleDateString("en-IN", { weekday: "short" })}</span>
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="text-lg">{fl(fix.home)}</span>
-                              <span className="text-xs font-semibold text-white/90">{fix.home}</span>
-                            </div>
-                            <div className="flex items-center gap-2 mt-1">
-                              <span className="text-lg">{fl(fix.away)}</span>
-                              <span className="text-xs font-semibold text-white/90">{fix.away}</span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          {status === "played" && res ? (
-                            <div>
-                              <p className="text-xs font-bold text-white/90">{res.homeGoals ?? "?"}–{res.awayGoals ?? "?"}</p>
-                              <p className="text-[8px] text-white/40 uppercase tracking-wider mt-0.5">FT</p>
-                              {pts !== null && <p className={`text-[9px] font-bold mt-1 ${pts > 0 ? "text-green-400" : "text-white/40"}`}>{pts > 0 ? `+${pts}` : "0"} PTS</p>}
-                            </div>
-                          ) : (
-                            <>
-                              <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${status === "open" ? "bg-green-950 text-green-400 border border-green-800" : "bg-amber-950/80 text-amber-400 border border-amber-900"}`}>{status}</span>
-                              {myPred && <p className="text-[9px] text-white/40 mt-1">✓ Predicted</p>}
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            )}
-
-            {/* ─── USER: Finished Matches ─── */}
-            {userTab === "finished" && !isAdmin && (() => {
-              return (
-                <div className="space-y-4">
-                <div className="text-left mb-6">
-                  <h2 className="font-heading italic text-3xl uppercase tracking-tight text-white">FINISHED MATCHES</h2>
-                  <p className="text-xs text-white/50 mt-1 uppercase tracking-wider">{finishedFixtures.filter(f => results[f.id]).length} matches played</p>
-                </div>
-                {finishedFixtures.length === 0 ? (
-                  <div className="liquid-glass rounded-[1.5rem] p-12 text-center border border-white/5">
-                    <span className="text-4xl mb-4 block">📅</span>
-                    <h3 className="font-heading italic text-xl text-white/70">No Finished Matches</h3>
-                    <p className="text-xs text-white/40 max-w-sm mx-auto mt-2">Completed matches will appear here.</p>
-                  </div>
-                ) : (
-                  [...finishedFixtures.filter(f => results[f.id])].reverse().map(fix => {
-                    const key = `${currentUser.id}_${fix.id}`;
-                    const myPred = predictions[key];
-                    const res = results[fix.id];
-                    const pts = res && myPred ? calcPoints(myPred, res, fix) : null;
-                    const isGold = currentUser?.favoriteTeam && (fix.home === currentUser.favoriteTeam || fix.away === currentUser.favoriteTeam);
-                    return (
-                      <div key={fix.id} className={`liquid-glass p-6 rounded-[1.5rem] border ${isGold ? "card-gold" : "border-white/10"} text-center`}>
-                        <div className="flex justify-between items-center mb-4">
-                          <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest">{fix.isKnockout ? fix.round : `Group ${fix.group}`}</span>
-                          <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-950 text-blue-400 border border-blue-800">FT</span>
-                        </div>
-                        <p className="text-[10px] text-white/40 mb-4">{formatDate(fix.date)}</p>
-                        <div className="relative frozen-inner rounded-xl p-4 max-w-xs mx-auto">
-                          <div className="flex items-center justify-center gap-6 mb-2">
-                            <div className={`text-center relative ${res.winner === fix.home ? "scale-110" : "opacity-60"}`}>
-                              <span className="text-4xl block mb-1">{fl(fix.home)}</span>
-                              <span className="text-[10px] font-semibold text-white/90 block">{fix.home}</span>
-                              {res.winner === fix.home && (
-                                <>
-                                  {[...Array(6)].map((_, i) => (
-                                    <div key={`c${i}`} className="confetti-piece" style={{
-                                      left: `${10 + i * 14}%`, top: `${10 + (i % 2) * 30}%`,
-                                      background: `hsl(${i * 60}, 80%, 60%)`,
-                                      animationDelay: `${i * 0.15}s`,
-                                    }} />
-                                  ))}
-                                  {[...Array(4)].map((_, i) => (
-                                    <div key={`f${i}`} className="firecracker" style={{
-                                      left: `${30 + i * 14}%`, top: `${5 + i * 8}%`,
-                                      background: `hsl(${i * 90 + 20}, 90%, 60%)`,
-                                      animationDelay: `${i * 0.2}s`,
-                                    }} />
-                                  ))}
-                                </>
-                              )}
-                            </div>
-                            <div className="text-center font-heading italic text-2xl text-white">
-                              {res.homeGoals ?? "?"}–{res.awayGoals ?? "?"}
-                            </div>
-                            <div className={`text-center relative ${res.winner === fix.away ? "scale-110" : "opacity-60"}`}>
-                              <span className="text-4xl block mb-1">{fl(fix.away)}</span>
-                              <span className="text-[10px] font-semibold text-white/90 block">{fix.away}</span>
-                              {res.winner === fix.away && (
-                                <>
-                                  {[...Array(6)].map((_, i) => (
-                                    <div key={`c${i}`} className="confetti-piece" style={{
-                                      left: `${10 + i * 14}%`, top: `${10 + (i % 2) * 30}%`,
-                                      background: `hsl(${i * 60 + 30}, 80%, 60%)`,
-                                      animationDelay: `${i * 0.15}s`,
-                                    }} />
-                                  ))}
-                                  {[...Array(4)].map((_, i) => (
-                                    <div key={`f${i}`} className="firecracker" style={{
-                                      left: `${30 + i * 14}%`, top: `${5 + i * 8}%`,
-                                      background: `hsl(${i * 90 + 50}, 90%, 60%)`,
-                                      animationDelay: `${i * 0.2}s`,
-                                    }} />
-                                  ))}
-                                </>
-                              )}
-                            </div>
-                          </div>
-                          {pts !== null && (
-                            <div className="text-center mb-2">
-                              <span className={`font-semibold px-3 py-1 rounded-full text-xs ${pts > 0 ? "bg-green-950 text-green-400" : "frozen-tag text-white/40"}`}>{pts > 0 ? `+${pts} PTS` : "0 PTS"}</span>
-                            </div>
-                          )}
-                          {(() => {
-                            const stats = getFixturePredictionStats(fix.id, predictions, fix.home, fix.away);
-                            if (!stats || stats.bars.length === 0) return null;
-                            return (
-                              <div className="mt-3 pt-3 border-t border-white/10">
-                                <p className="text-[9px] text-white/40 uppercase tracking-wider text-center mb-2">Prediction Distribution</p>
-                                <div className="space-y-1.5">
-                                  {stats.bars.map((bar, bi) => (
-                                    <div key={`${bar.team}-${bi}`} className="flex items-center gap-2">
-                                      <span className="text-[8px] text-white/50 w-10 text-right leading-tight truncate shrink-0">{bar.team === fix.home ? fix.home : bar.team === fix.away ? fix.away : "Draw"}</span>
-                                      <div className="flex-1 h-4 rounded-full bg-white/5 overflow-hidden">
-                                        <div className="h-full rounded-full transition-all duration-500" style={{
-                                          width: `${bar.pct}%`,
-                                          background: bar.team === fix.home ? "#22c55e" : bar.team === fix.away ? "#3b82f6" : "#ffffff",
-                                        }} />
-                                      </div>
-                                      <span className="text-[9px] font-bold text-white/70 w-8 text-left shrink-0">{bar.pct}%</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      </div>
-                    );
-                  })
-                )
-                }
-                </div>
-              );
-            })()}
-
-            {/* ─── USER: Leaderboard ─── */}
-            {userTab === "leaderboard" && !isAdmin && (
-              <div>
-                <div className="text-left mb-6">
-                  <h2 className="font-heading italic text-3xl uppercase tracking-tight text-white">CAMPUS LEADERBOARD</h2>
-                  <p className="text-xs text-white/50 mt-1 uppercase tracking-wider">{leaderboard.filter(u => !u.isAdmin).length} students registered</p>
-                </div>
-                <div className="space-y-2">
-                  {leaderboard.filter(u => !u.isAdmin).map((u, i) => {
-                    const isMe = u.id === currentUser.id;
-                    return (
-                      <div key={u.id} className={`liquid-glass p-4 rounded-xl flex items-center gap-4 ${isMe ? "card-gold" : "border border-white/5"}`}>
-                        <span className="font-heading italic text-lg font-bold w-10 text-center text-white/60">
-                          {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`}
-                        </span>
-                        {u.photoURL ? (
-                          <img src={u.photoURL} alt={u.name} className="w-9 h-9 rounded-full border border-white/10" />
-                        ) : (
-                          <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center border border-white/15"><User className="h-3.5 w-3.5 text-white/70" /></div>
-                        )}
-                        <div className="flex-1 text-left">
-                          <h4 className="text-sm font-semibold text-white leading-tight">
-                            {u.favoriteTeam && <span className="inline-block mr-1.5 align-middle text-base">{fl(u.favoriteTeam)}</span>}
-                            {u.name} {isMe && <span className="text-[10px] text-white/55 font-normal ml-1">(You)</span>}
-                          </h4>
-                          <p className="text-[10px] text-white/40 uppercase tracking-widest mt-0.5">{u.dept} • {u.year || "1st Year"}</p>
-                        </div>
-                        <span className="font-heading italic text-lg text-white font-bold">{u.points} PTS</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* ─── USER: You (Profile & Stats) ─── */}
-            {userTab === "you" && !isAdmin && (() => {
-              const stats = getUserStats(currentUser.id, predictions, results, allFixtures);
-              const nonAdminLeaderboard = leaderboard.filter(u => !u.isAdmin);
-              const myLeader = nonAdminLeaderboard.find(l => l.id === currentUser.id);
-              const myPoints = myLeader?.points || 0;
-              const rank = nonAdminLeaderboard.findIndex(l => l.id === currentUser.id) + 1;
-              const myPredsList = Object.values(predictions).filter(p => p.uid === currentUser.id)
-                .sort((a, b) => {
-                  const fixA = allFixtures.find(f => String(f.id) === String(a.fixtureId));
-                  const fixB = allFixtures.find(f => String(f.id) === String(b.fixtureId));
-                  return (fixB ? new Date(fixB.date) : 0) - (fixA ? new Date(fixA.date) : 0);
-                });
-              return (
-                <div className="space-y-6">
-                  <div className="text-left mb-2">
-                    <h2 className="font-heading italic text-3xl uppercase tracking-tight text-white">YOUR STATS</h2>
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div className="liquid-glass p-4 rounded-xl border border-white/5 text-center">
-                      <span className="text-2xl font-bold text-white">{myPoints}</span>
-                      <p className="text-[9px] text-white/50 uppercase tracking-widest mt-1">Points</p>
-                    </div>
-                    <div className="liquid-glass p-4 rounded-xl border border-white/5 text-center">
-                      <span className="text-2xl font-bold text-white">#{rank}</span>
-                      <p className="text-[9px] text-white/50 uppercase tracking-widest mt-1">Rank</p>
-                    </div>
-                    <div className="liquid-glass p-4 rounded-xl border border-white/5 text-center">
-                      <span className="text-2xl font-bold text-white">{stats.totalPredictions}</span>
-                      <p className="text-[9px] text-white/50 uppercase tracking-widest mt-1">Predictions</p>
-                    </div>
-                    <div className="liquid-glass p-4 rounded-xl border border-white/5 text-center">
-                      <span className="text-2xl font-bold text-white">{stats.overallAccuracy}%</span>
-                      <p className="text-[9px] text-white/50 uppercase tracking-widest mt-1">Accuracy</p>
-                    </div>
-                  </div>
-
-                  <div className="liquid-glass p-6 rounded-xl border border-white/5 text-center">
-                    <h3 className="text-sm font-semibold text-white/80 mb-4 uppercase tracking-wider">Prediction Accuracy</h3>
-                    <div className="flex items-center justify-center gap-8">
-                      <svg width="120" height="120" viewBox="0 0 120 120" className="-rotate-90">
-                        <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="10" />
-                        <circle cx="60" cy="60" r="52" fill="none" stroke={stats.accuracy > 50 ? "#22c55e" : "#eab308"} strokeWidth="10"
-                          strokeDasharray={`${(stats.accuracy / 100) * 327} 327`}
-                          strokeLinecap="round" />
-                        <circle cx="60" cy="60" r="38" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="8" />
-                        <circle cx="60" cy="60" r="38" fill="none" stroke={stats.scorelineAccuracy > 50 ? "#3b82f6" : "#a855f7"} strokeWidth="8"
-                          strokeDasharray={`${(stats.scorelineAccuracy / 100) * 239} 239`}
-                          strokeLinecap="round" />
-                      </svg>
-                      <div className="text-left">
-                        <div className="flex items-center gap-3 mb-2">
-                          <span className="w-3 h-3 rounded-full bg-green-500" />
-                          <span className="text-xs text-white/70">Winner Correct: {stats.correctWinners}</span>
-                        </div>
-                        <div className="flex items-center gap-3 mb-2">
-                          <span className="w-3 h-3 rounded-full bg-white/20" />
-                          <span className="text-xs text-white/70">Winner Incorrect: {stats.scoredPredictions - stats.correctWinners}</span>
-                        </div>
-                        <div className="flex items-center gap-3 mb-2">
-                          <span className="w-3 h-3 rounded-full bg-blue-500" />
-                          <span className="text-xs text-white/70">Scoreline Correct: {stats.correctScorelines}</span>
-                        </div>
-                        <div className="flex items-center gap-3 mb-2">
-                          <span className="w-3 h-3 rounded-full bg-white/20" />
-                          <span className="text-xs text-white/70">Scoreline Incorrect: {stats.totalScorelinePreds - stats.correctScorelines}</span>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className="w-3 h-3 rounded-full bg-white/10" />
-                          <span className="text-xs text-white/70">Unscored: {stats.totalPredictions - stats.scoredPredictions}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {currentUser.favoriteTeam && (
-                    <div className="liquid-glass p-5 rounded-xl border border-white/5 text-center">
-                      <p className="text-[9px] text-white/50 uppercase tracking-widest mb-2">Your Supported Team</p>
-                      <div className="flex items-center justify-center gap-3">
-                        <img src={teamJerseyPath(currentUser.favoriteTeam)} alt={currentUser.favoriteTeam} className="w-12 h-16 sm:w-16 sm:h-20 object-contain" onError={(e) => { e.target.style.display = "none"; }} />
-                        <div className="text-left">
-                          <span className="text-2xl block">{fl(currentUser.favoriteTeam)}</span>
-                          <span className="text-sm font-semibold text-white">{currentUser.favoriteTeam}</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="text-left">
-                    <h3 className="font-heading italic text-xl uppercase tracking-tight text-white mb-4">Prediction History</h3>
-                  </div>
-                  {myPredsList.length === 0 ? (
-                    <div className="liquid-glass rounded-xl p-8 text-center border border-white/5">
-                      <span className="text-3xl block mb-2">🔮</span>
-                      <p className="text-xs text-white/50">No predictions yet</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {myPredsList.map(pred => {
-                        const fix = allFixtures.find(f => String(f.id) === String(pred.fixtureId));
-                        const res = results[pred.fixtureId];
-                        const pts = fix && res ? calcPoints(pred, res, fix) : null;
-                        const isGold = fix && currentUser?.favoriteTeam && (fix.home === currentUser.favoriteTeam || fix.away === currentUser.favoriteTeam);
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: "easeOut", delay: 1.3 }} className="mt-8 sm:mt-12 w-full max-w-3xl">
+                    <p className="text-[10px] sm:text-xs text-white/45 uppercase tracking-[0.2em] font-semibold mb-4">How it works</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 text-left mb-8 pb-8">
+                      {HERO_STEPS.map((step, i) => {
+                        const Icon = step.icon;
                         return (
-                          <div key={pred.id || `${pred.uid}_${pred.fixtureId}`} className={`liquid-glass p-4 rounded-xl border ${isGold ? "card-gold" : "border-white/5"}`}>
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <p className="text-xs font-semibold text-white">
-                                  {fix ? `${fl(fix.home)} ${fix.home} vs ${fix.away} ${fl(fix.away)}` : `Match #${pred.fixtureId}`}
-                                </p>
-                                <p className="text-[10px] text-white/40 mt-1">
-                                  {fix ? formatDate(fix.date) : ""}
-                                  {pred.submittedAt && ` • Predicted: ${new Date(pred.submittedAt?.toMillis ? pred.submittedAt.toMillis() : pred.submittedAt).toLocaleString("en-IN")}`}
-                                </p>
+                          <div key={step.title} className="liquid-glass p-3 sm:p-4 rounded-[1.25rem] border border-white/5">
+                            <div className="frozen-inner rounded-xl p-4 h-full">
+                              <div className="flex items-center gap-2.5 mb-3">
+                                <span className="frozen-tag w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-bold text-white/70">{i + 1}</span>
+                                <Icon className="h-5 w-5 text-white/90 shrink-0" />
                               </div>
-                              <div className="text-right">
-                                <p className="text-[10px] text-white/70 font-semibold">{formatPredictionSummary(pred, fix)}</p>
-                                {pts !== null && <p className={`text-[10px] font-bold mt-1 ${pts > 0 ? "text-green-400" : "text-white/40"}`}>{pts > 0 ? `+${pts} PTS` : "0 PTS"}</p>}
-                                {res && <p className="text-[9px] text-white/40 mt-0.5">Result: {formatResultSummary(res, fix)}</p>}
-                              </div>
+                              <h3 className="font-heading italic text-xl text-white uppercase tracking-tight leading-none">{step.title}</h3>
+                              <p className="mt-2 text-[11px] sm:text-xs text-white/60 leading-relaxed font-light">{step.desc}</p>
                             </div>
                           </div>
                         );
                       })}
                     </div>
-                  )}
+                  </motion.div>
                 </div>
-              );
-            })()}
+              </div>
 
-            {/* ═══════════════════════════════════════════════════════════════════
-              ADMIN DASHBOARD
-          ═══════════════════════════════════════════════════════════════════ */}
-            {page === "admin" && isAdmin && (
-              <div>
-                <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-                  <h2 className="font-heading italic text-2xl uppercase tracking-tight text-white">Console</h2>
-                  <div className="flex items-center gap-3">
-                    <button className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 ${isLockedGlobal ? "bg-green-950 text-green-400 border border-green-800" : "bg-amber-950 text-amber-400 border border-amber-800"}`}
-                      onClick={() => updateArenaSettings({ arenaLocked: !isLockedGlobal })}>
-                      {isLockedGlobal ? <Unlock className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
-                      {isLockedGlobal ? "Unlock Arena" : "Lock Arena"}
-                    </button>
-                    <button className="btn-secondary px-4 py-1.5 rounded-full text-[10px] font-semibold" onClick={() => openAddMatch()}>+ Add Match</button>
-                    {undoInfo && (
-                      <button className="btn-secondary px-3 py-1.5 rounded-full text-[10px] font-semibold border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10" onClick={handleUndoFixtureEdit}>
-                        ↩ Undo Edit
-                      </button>
-                    )}
+              <div className="scroll-section scroll-section--over-video scroll-section--predict">
+                <div className="predict-slide__inner relative z-10 px-4 sm:px-8 md:px-16 lg:px-20 flex flex-col w-full max-w-7xl mx-auto justify-start gap-5 md:gap-8">
+                  <div className="text-left shrink-0">
+                    <h2 className="font-heading italic text-white text-4xl sm:text-5xl md:text-7xl lg:text-[5.5rem] leading-[0.9] tracking-[-3px] uppercase">OFFICIAL RULES</h2>
+                    <p className="mt-3 text-xs sm:text-sm text-white/55 uppercase tracking-widest font-semibold">Predizone tournament guidelines</p>
                   </div>
-                </div>
-
-                <div className="flex gap-1 p-1 rounded-xl bg-white/5 border border-white/5 mb-6 overflow-x-auto no-scrollbar">
-                  {["results", "matches", "custommatch", "winners", "upcoming", "finished", "stream", "leaderboard", "participants"].map((tab) => (
-                    <button key={tab}
-                      className={`px-3 py-1.5 rounded-lg text-[9px] font-semibold uppercase tracking-wider whitespace-nowrap transition-colors ${adminTab === tab ? "bg-white text-black" : "text-white/60 hover:text-white border border-white/10"}`}
-                      onClick={() => setAdminTab(tab)}>{tab === "custommatch" ? "Custom Match" : tab === "winners" ? "Winners" : tab}</button>
-                  ))}
-                </div>
-
-                {/* ADMIN: Results */}
-                {adminTab === "results" && (
-                  <div className="space-y-4">
-                    <div className="flex gap-1.5 overflow-x-auto pb-2 no-scrollbar">
-                      {groups.map(g => (
-                        <button key={g}
-                          className={`px-4 py-1.5 text-xs font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${adminGroup === g ? "bg-white text-black" : "bg-white/5 text-white/60 hover:text-white"}`}
-                          onClick={() => setAdminGroup(g)}>Group {g}</button>
-                      ))}
-                    </div>
-                    {mergeFixtures(FIXTURES, fixtureOverrides || {}).filter(f => f.group === adminGroup).map(fix => {
-                      const res = results[fix.id];
-                      const isGold = currentUser?.favoriteTeam && (fix.home === currentUser.favoriteTeam || fix.away === currentUser.favoriteTeam);
-                      return (
-                        <div key={fix.id} className={`liquid-glass p-4 rounded-xl border ${isGold ? "card-gold" : "border-white/5"} flex items-center justify-between text-left`}>
-                          <div>
-                            <h4 className="text-sm font-semibold text-white">{fl(fix.home)} {fix.home} vs {fix.away} {fl(fix.away)}</h4>
-                            <p className="text-[10px] text-white/40 mt-1">{formatDate(fix.date)}</p>
-                            {res && <div className="frozen-inner rounded-lg px-3 py-2 text-xs font-semibold text-white/80 mt-2 inline-block">Result: {formatResultSummary(res, fix)}</div>}
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <button className="btn-secondary p-2 rounded-lg text-[10px] font-semibold" title="Edit fixture" onClick={() => openEditFixture(fix)}>✏️</button>
-                            <button className="btn-secondary px-3 py-1.5 rounded-lg text-xs font-semibold" onClick={() => { setSelFixture(fix); setResHomeGoals(res?.homeGoals !== undefined ? String(res.homeGoals) : ""); setResAwayGoals(res?.awayGoals !== undefined ? String(res.awayGoals) : ""); }}>
-                              {res ? "Edit" : "Result"}
-                            </button>
-                          </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 w-full pb-20">
+                    {OFFICIAL_RULES.map((rule) => (
+                      <div key={rule.num} className="liquid-glass rounded-[1.25rem] p-4 sm:p-5 border border-white/5 hover:border-white/10 transition-colors flex flex-col gap-3">
+                        <div className="frozen-inner rounded-xl px-3 py-2.5 flex items-center gap-3">
+                          <span className="frozen-tag w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold text-white shrink-0">{rule.num}</span>
+                          <span className="text-[10px] uppercase tracking-[0.2em] text-white/45 font-bold">Rule {rule.num}</span>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {/* ADMIN: Matches (admin-created) */}
-                {adminTab === "matches" && (
-                  <div className="space-y-3">
-                    {knockoutFixtures.length === 0 ? (
-                      <p className="text-xs text-white/40 py-8 text-center">No knockout stage fixtures configured yet.</p>
-                    ) : (
-                      knockoutFixtures.map(fix => {
-                        const res = results[fix.id];
-                        const isGold = currentUser?.favoriteTeam && (fix.home === currentUser.favoriteTeam || fix.away === currentUser.favoriteTeam);
-                        return (
-                          <div key={fix.id} className={`liquid-glass p-4 rounded-xl border ${isGold ? "card-gold" : "border-white/5"} flex flex-col text-left`}>
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <span className="bg-white/10 border border-white/10 px-2.5 py-0.5 rounded text-[10px] text-white font-bold uppercase tracking-wider">{fix.round || "Custom"}</span>
-                                <h4 className="text-sm font-semibold text-white mt-3">{fl(fix.home)} {fix.home} vs {fix.away} {fl(fix.away)}</h4>
-                                <p className="text-[10px] text-white/45 mt-1">{formatDate(fix.date)} &nbsp;•&nbsp; {fix.venue}</p>
-                                {res && <p className="frozen-inner rounded-lg px-3 py-2 text-xs font-bold text-white/80 mt-2 inline-block">Result: {formatResultSummary(res, fix)}</p>}
-                              </div>
-                              <div className="flex gap-2">
-                                <button className="btn-secondary px-3 py-1 rounded text-[10px] font-semibold" onClick={() => openAddMatch(fix)}>Edit</button>
-                                <button className="btn-secondary px-3 py-1 rounded text-[10px] font-semibold border-red-500/30 text-red-400 hover:bg-red-500/10" onClick={() => handleDeleteMatch(fix.id)}>Delete</button>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                )}
-
-                {/* ADMIN: Custom Match (same as add match, dedicated tab) */}
-                {adminTab === "custommatch" && (
-                  <div className="liquid-glass p-6 rounded-xl border border-white/10">
-                    <h3 className="font-heading italic text-xl text-white uppercase tracking-tight mb-6">Create Custom Match</h3>
-                    <div className="mb-5">
-                      <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-2">Round / Label</label>
-                      <div className="flex gap-1.5 flex-wrap">
-                        {ROUNDS.concat(["Custom"]).map(r => (
-                          <button key={r} className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase border transition-all ${newRound === r ? "bg-white text-black border-white" : "bg-white/5 border-white/10 text-white/60 hover:text-white"}`} onClick={() => setNewRound(r)}>{r}</button>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end mb-5">
-                      <div>
-                        <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Home Team</label>
-                        <input className="input-glass w-full px-3 py-2.5 rounded-lg text-xs" placeholder="e.g. Argentina" value={newHome} onChange={e => setNewHome(e.target.value)} />
-                      </div>
-                      <span className="text-center text-[10px] font-bold text-white/20 pb-2 hidden sm:block">VS</span>
-                      <div>
-                        <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Away Team</label>
-                        <input className="input-glass w-full px-3 py-2.5 rounded-lg text-xs" placeholder="e.g. France" value={newAway} onChange={e => setNewAway(e.target.value)} />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4 mb-5">
-                      <div>
-                        <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Date</label>
-                        <input className="input-glass w-full px-3 py-2.5 rounded-lg text-xs" type="date" value={newDate} onChange={e => setNewDate(e.target.value)} />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Time</label>
-                        <input className="input-glass w-full px-3 py-2.5 rounded-lg text-xs" type="time" value={newTime} onChange={e => setNewTime(e.target.value)} />
-                      </div>
-                    </div>
-                    <div className="mb-6">
-                      <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Venue</label>
-                      <input className="input-glass w-full px-3 py-2.5 rounded-lg text-xs" placeholder="e.g. MetLife Stadium" value={newVenue} onChange={e => setNewVenue(e.target.value)} />
-                    </div>
-                    <button className="btn-primary px-8 py-3 rounded-full text-xs font-bold uppercase tracking-wider" onClick={handleSaveMatch}>Create Custom Match</button>
-                  </div>
-                )}
-
-                {/* ADMIN: Winners entry (quick result entry) */}
-                {adminTab === "winners" && (
-                  <div className="space-y-4">
-                    <p className="text-[11px] text-white/50 uppercase tracking-wider mb-4">Enter results for any match</p>
-                    {allFixtures.filter(f => new Date(f.date) < new Date()).sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 20).map(fix => {
-                      const res = results[fix.id];
-                      const isGold = currentUser?.favoriteTeam && (fix.home === currentUser.favoriteTeam || fix.away === currentUser.favoriteTeam);
-                      return (
-                        <div key={fix.id} className={`liquid-glass p-4 rounded-xl border ${isGold ? "card-gold" : "border-white/5"} flex items-center justify-between text-left`}>
-                          <div>
-                            <h4 className="text-sm font-semibold text-white">{fl(fix.home)} {fix.home} vs {fix.away} {fl(fix.away)}</h4>
-                            <p className="text-[10px] text-white/40 mt-1">{formatDate(fix.date)}</p>
-                            {res && <div className="frozen-inner rounded-lg px-3 py-2 text-xs font-semibold text-white/80 mt-2 inline-block">Result: {formatResultSummary(res, fix)}</div>}
-                          </div>
-                          <button className="btn-secondary px-4 py-1.5 rounded-lg text-xs font-semibold" onClick={() => { setSelFixture(fix); setResHomeGoals(res?.homeGoals !== undefined ? String(res.homeGoals) : ""); setResAwayGoals(res?.awayGoals !== undefined ? String(res.awayGoals) : ""); }}>
-                            {res ? "Edit" : "Enter"}
-                          </button>
+                        <div className="frozen-inner rounded-xl p-4 flex-1">
+                          <p className="text-xs sm:text-[13px] text-white/75 leading-relaxed font-light">{rule.text}</p>
+                          {rule.bullets && (
+                            <ul className="mt-2.5 space-y-1.5">
+                              {rule.bullets.map((item) => (
+                                <li key={item} className="text-xs text-white/65 leading-relaxed font-light flex gap-2">
+                                  <span className="text-white/35 shrink-0">•</span>
+                                  <span>{item}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {/* ADMIN: All Fixtures */}
-                {adminTab === "upcoming" && (
-                  <div className="space-y-3">
-                    {upcomingFiltered.length === 0 ? (
-                      <p className="text-xs text-white/40 py-8 text-center">No matches.</p>
-                    ) : (
-                      upcomingFiltered.map(fix => {
-                        const status = getStatus(fix, isLockedGlobal);
-                        const res = results[fix.id];
-                        const isGold = currentUser?.favoriteTeam && (fix.home === currentUser.favoriteTeam || fix.away === currentUser.favoriteTeam);
-                        return (
-                          <div key={fix.id} className={`liquid-glass p-4 rounded-xl border ${isGold ? "card-gold" : "border-white/5"} flex items-center justify-between`}>
-                            <div>
-                              <span className="text-[10px] text-white/50">{fix.isKnockout ? fix.round : `Group ${fix.group}`}</span>
-                              <h4 className="text-sm font-semibold text-white mt-1">{fl(fix.home)} {fix.home} vs {fix.away} {fl(fix.away)}</h4>
-                              <p className="text-[10px] text-white/40 mt-1">{formatDate(fix.date)}</p>
-                            </div>
-                            <div className="text-right">
-                              {status === "played" && res ? (
-                                <div>
-                                  <p className="text-xs font-bold text-white/90">{res.homeGoals ?? "?"}–{res.awayGoals ?? "?"}</p>
-                                  <p className="text-[8px] text-white/40 uppercase tracking-wider mt-0.5">FT</p>
-                                </div>
-                              ) : (
-                                <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full ${status === "open" ? "bg-green-950 text-green-400" : "bg-amber-950/80 text-amber-400"}`}>{status}</span>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                )}
-
-                {/* ADMIN: Finished */}
-                {adminTab === "finished" && (
-                  <div className="space-y-3">
-                {finishedFixtures.filter(f => results[f.id]).length === 0 ? (
-                      <p className="text-xs text-white/40 py-8 text-center">No finished matches.</p>
-                    ) : (
-                      [...finishedFixtures].reverse().map(fix => {
-                        const res = results[fix.id];
-                        const isGold = currentUser?.favoriteTeam && (fix.home === currentUser.favoriteTeam || fix.away === currentUser.favoriteTeam);
-                        return (
-                          <div key={fix.id} className={`liquid-glass p-4 rounded-xl border ${isGold ? "card-gold" : "border-white/5"} flex items-center justify-between`}>
-                            <div>
-                              <span className="text-[10px] text-white/50">{fix.isKnockout ? fix.round : `Group ${fix.group}`}</span>
-                              <h4 className="text-sm font-semibold text-white mt-1">{fl(fix.home)} {fix.home} vs {fix.away} {fl(fix.away)}</h4>
-                              <p className="text-[10px] text-white/40 mt-1">{formatDate(fix.date)}</p>
-                            </div>
-                            <div className="text-right">
-                              {res ? (
-                                <div>
-                                  <p className="text-xs font-bold text-white/90">{res.homeGoals ?? "?"}–{res.awayGoals ?? "?"}</p>
-                                  <p className="text-[8px] text-white/40 uppercase tracking-wider mt-0.5">FT</p>
-                                </div>
-                              ) : (
-                                <span className="text-[9px] text-white/40">No result</span>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                )}
-
-                {adminTab === "stream" && (
-                  <div className="space-y-4">
-                    <div className="text-left">
-                      <h3 className="font-heading italic text-xl uppercase tracking-tight text-white mb-2">Stream Poll</h3>
-                      <p className="text-xs text-white/50">Would you like live streaming of matches here?</p>
-                    </div>
-                    {(() => {
-                      const yesCount = Object.values(streamResponses).filter(r => r.response === "yes").length;
-                      const noCount = Object.values(streamResponses).filter(r => r.response === "no").length;
-                      const total = yesCount + noCount;
-                      return (
-                        <div className="grid grid-cols-3 gap-3">
-                          <div className="liquid-glass p-4 rounded-xl border border-white/5 text-center">
-                            <p className="text-2xl font-bold text-white">{total}</p>
-                            <p className="text-[9px] text-white/50 uppercase tracking-widest mt-1">Total Votes</p>
-                          </div>
-                          <div className="liquid-glass p-4 rounded-xl border border-white/5 text-center">
-                            <p className="text-2xl font-bold text-green-400">{yesCount}</p>
-                            <p className="text-[9px] text-white/50 uppercase tracking-widest mt-1">Yes</p>
-                          </div>
-                          <div className="liquid-glass p-4 rounded-xl border border-white/5 text-center">
-                            <p className="text-2xl font-bold text-red-400">{noCount}</p>
-                            <p className="text-[9px] text-white/50 uppercase tracking-widest mt-1">No</p>
-                          </div>
-                        </div>
-                      );
-                    })()}
-                    {Object.values(streamResponses).filter(r => r.response === "yes" || r.response === "no").length > 0 && (
-                      <div className="w-full bg-white/10 rounded-full h-4 overflow-hidden flex">
-                        <div className="bg-green-500 h-full transition-all" style={{ width: `${(Object.values(streamResponses).filter(r => r.response === "yes").length / Math.max(Object.values(streamResponses).filter(r => r.response === "yes" || r.response === "no").length, 1)) * 100}%` }} />
-                        <div className="bg-red-500 h-full transition-all" style={{ width: `${(Object.values(streamResponses).filter(r => r.response === "no").length / Math.max(Object.values(streamResponses).filter(r => r.response === "yes" || r.response === "no").length, 1)) * 100}%` }} />
-                      </div>
-                    )}
-                    <button className="btn-secondary px-4 py-2 rounded-lg text-xs font-semibold border-red-500/30 text-red-400 hover:bg-red-500/10" onClick={async () => { await clearStreamPoll(); setStreamResponses({}); }}>
-                      Clear All Responses
-                    </button>
-                  </div>
-                )}
-
-                {/* ADMIN: Leaderboard */}
-                {adminTab === "leaderboard" && (
-                  <div className="space-y-2">
-                    {leaderboard.map((u) => (
-                      <div key={u.id} className="liquid-glass p-3.5 rounded-xl border border-white/5 flex justify-between items-center text-left">
-                        <div>
-                          <h4 className="text-sm font-semibold text-white">{u.name}</h4>
-                          <p className="text-[10px] text-white/40 uppercase tracking-widest mt-0.5">{u.dept} • {u.year || "1st Year"}</p>
-                        </div>
-                        <span className="font-heading italic text-lg text-white font-bold">{u.points} PTS</span>
                       </div>
                     ))}
                   </div>
-                )}
+                </div>
+              </div>
 
-                {/* ADMIN: Participants (clickable for history) */}
-                {adminTab === "participants" && !viewingParticipant && (
-                  <div className="space-y-2">
-                    {Object.values(users).map(u => {
-                      const count = allFixtures.filter(f => predictions[`${u.id}_${f.id}`]).length;
-                      return (
-                        <div key={u.id} className="liquid-glass p-4 rounded-xl border border-white/5 flex items-center justify-between text-left cursor-pointer hover:border-white/20 transition-colors"
-                          onClick={() => setViewingParticipant(u)}>
-                          <div>
-                            <h4 className="text-sm font-semibold text-white">{u.name}</h4>
-                            <span className="text-[10px] text-white/40 uppercase tracking-widest block mt-0.5">{u.dept} • {u.year || "1st Year"}</span>
+              <div className="scroll-section scroll-section--solid scroll-section--teams transition-colors duration-[650ms]" style={{ backgroundColor: TEAMS[activeIndex].bg }}>
+                <div className="absolute inset-0 pointer-events-none z-50 opacity-40 bg-[url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22><filter id=%22noise%22><feTurbulence type=%22fractalNoise%22 baseFrequency=%220.9%22 numOctaves=%224%22 stitchTiles=%22stitch%22/></filter><rect width=%22200%22 height=%22200%22 filter=%22url(%23noise)%22 opacity=%220.08%22/></svg>')] bg-repeat" />
+                <div className="teams-slide__shell">
+                  <div className="teams-slide__header">
+                    <span className="text-[10px] font-bold tracking-[0.2em] text-white/80 uppercase">TEAM JERSEYS · {activeIndex + 1} / {TEAMS.length}</span>
+                    <button className="sm:hidden flex items-center gap-1 text-white/80 hover:text-white text-[10px] font-bold uppercase tracking-widest transition-colors" onClick={() => scrollToSlide(3)}>
+                      Sponsors <ArrowRight className="h-3 w-3" />
+                    </button>
+                    <button className="hidden sm:flex items-center gap-1 text-white hover:opacity-85 transition-opacity" onClick={() => scrollToSlide(3)}>
+                      <span className="font-heading uppercase font-normal tracking-tight leading-none text-2xl" style={{ fontFamily: "'Anton', sans-serif" }}>DISCOVER SPONSORS</span>
+                      <ArrowRight className="h-5 w-5" />
+                    </button>
+                  </div>
+
+                  <div className="teams-slide__stage">
+                    <div className="contenders-bg absolute inset-x-0 flex items-center justify-center pointer-events-none select-none z-[2] font-heading font-black opacity-30 text-white tracking-tight leading-none text-center">
+                      <span className="font-heading font-bold" style={{ fontSize: "clamp(64px, 22vw, 380px)", fontFamily: "'Anton', sans-serif" }}>CONTENDERS</span>
+                    </div>
+                    <div className="jersey-carousel jersey-carousel--swipeable z-[3]" onTouchStart={handleJerseyTouchStart} onTouchEnd={handleJerseyTouchEnd}>
+                      {TEAMS.map((entry, i) => {
+                        const roleStyle = getRoleStyle(i);
+                        const isNear = Math.abs(((i - activeIndex + TEAMS.length) % TEAMS.length)) <= 2 ||
+                          Math.abs(((i - activeIndex + TEAMS.length) % TEAMS.length) - TEAMS.length) <= 2;
+                        return (
+                          <div key={entry.name}
+                            className={`jersey-carousel__slide absolute left-1/2 origin-center${i === activeIndex ? " jersey-carousel__slide--active" : ""}`}
+                            style={{
+                              ...roleStyle, aspectRatio: "0.72 / 1",
+                              transition: roleStyle.display !== "none" ? "transform 650ms cubic-bezier(0.4,0,0.2,1), opacity 650ms cubic-bezier(0.4,0,0.2,1)" : "none",
+                              willChange: roleStyle.display !== "none" ? "transform, opacity" : "auto"
+                            }}>
+                            <span className="jersey-carousel__shadow" aria-hidden="true" />
+                            <img src={entry.jersey} alt={`${entry.name} jersey`}
+                              className="relative z-[1] w-full h-full object-contain object-center select-none"
+                              draggable="false"
+                              loading={isNear ? "eager" : "lazy"}
+                              onError={(e) => { if (e.currentTarget.src !== JERSEY_PLACEHOLDER) e.currentTarget.src = JERSEY_PLACEHOLDER; }} />
                           </div>
-                          <div className="text-right flex items-center gap-3">
-                            <span className="text-xs font-semibold text-white block">{count} / {allFixtures.length}</span>
-                            <Eye className="h-3.5 w-3.5 text-white/40" />
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="teams-slide__footer jersey-carousel__footer sm:max-w-[320px] text-left">
+                    <div className="flex items-center justify-between sm:block gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 mb-1 sm:mb-2">
+                          <span className="text-xl sm:text-2xl shrink-0">{fl(TEAMS[activeIndex].name)}</span>
+                          <h3 className="font-semibold uppercase tracking-widest text-sm sm:text-[22px] text-white leading-tight truncate">{TEAMS[activeIndex].team}</h3>
+                        </div>
+                        <p className="text-[10px] sm:text-xs text-white/70 leading-relaxed font-light mb-0 sm:mb-5">Group {TEAMS[activeIndex].group} · WC 2026</p>
+                      </div>
+                      <div className="hidden sm:flex items-center gap-3 shrink-0">
+                        <button className="w-16 h-16 rounded-full border-2 border-white flex items-center justify-center text-white hover:scale-105 hover:bg-white/10 transition-all active:scale-95" onClick={() => navigateTeams("prev")} aria-label="Previous team">
+                          <ArrowLeft className="h-6 w-6" />
+                        </button>
+                        <button className="w-16 h-16 rounded-full border-2 border-white flex items-center justify-center text-white hover:scale-105 hover:bg-white/10 transition-all active:scale-95" onClick={() => navigateTeams("next")} aria-label="Next team">
+                          <ArrowRight className="h-6 w-6" />
+                        </button>
+                      </div>
+                      <p className="sm:hidden text-[10px] text-white/45 uppercase tracking-widest shrink-0">Swipe to browse</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="scroll-section scroll-section--over-video scroll-section--sponsors">
+                <div className="sponsors-slide__inner relative z-10 px-6 max-w-4xl text-center w-full flex flex-col items-center justify-center gap-4 mx-auto">
+                  <h2 className="font-heading italic text-white text-5xl md:text-7xl lg:text-[5.5rem] leading-[0.9] tracking-[-3px] uppercase mb-3 sm:mb-4">PROUD SPONSORS</h2>
+                  <p className="text-white/50 text-xs uppercase tracking-widest mb-6 sm:mb-12 font-semibold">Backed by campus organizations and local businesses</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 w-full max-w-xl mx-auto">
+                    {SPONSORS.map((sp) => (
+                      <div key={sp.label} className="liquid-glass rounded-[1.25rem] p-4 sm:p-5 text-center border border-white/5">
+                        <div className="frozen-inner rounded-xl p-4 sm:p-5 flex flex-col items-center gap-3 sm:gap-4 h-full">
+                          <div className="w-full h-24 sm:h-32 rounded-xl frozen-inner flex items-center justify-center p-3 sm:p-4 relative overflow-hidden group">
+                            <div className="absolute inset-0 bg-gradient-to-tr from-white/0 to-white/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+                            <img src={sp.logo} alt={`${sp.name} logo`} className="h-full max-h-16 sm:max-h-24 object-contain filter brightness-100 contrast-100 transition-transform duration-300 group-hover:scale-105 select-none" draggable="false" />
+                          </div>
+                          <div className="frozen-tag px-4 py-1.5 rounded-full text-white font-bold tracking-widest text-[11px] uppercase inline-block">{sp.label}</div>
+                          <div className="flex flex-col gap-1">
+                            <h4 className="text-sm font-semibold text-white/95 leading-tight">{sp.name}</h4>
+                            <p className="text-[11px] text-white/45">{sp.desc}</p>
                           </div>
                         </div>
-                      );
-                    })}
+                      </div>
+                    ))}
                   </div>
-                )}
+                  <button className="btn-primary mt-6 sm:mt-12 px-7 py-3 rounded-full text-xs uppercase tracking-wider font-semibold" onClick={() => scrollToSlide(4)}>Go To Portal</button>
+                </div>
+              </div>
 
-                {adminTab === "participants" && viewingParticipant && (() => {
-                  const u = viewingParticipant;
-                  const stats = getUserStats(u.id, predictions, results, allFixtures);
-                  const pLeader = leaderboard.filter(u2 => !u2.isAdmin).find(l => l.id === u.id);
-                  const pPoints = pLeader?.points || 0;
-                  const rank = leaderboard.filter(u2 => !u2.isAdmin).findIndex(l => l.id === u.id) + 1;
-                  const pPredsList = Object.values(predictions).filter(p => p.uid === u.id)
-                    .sort((a, b) => {
-                      const fixA = allFixtures.find(f => String(f.id) === String(a.fixtureId));
-                      const fixB = allFixtures.find(f => String(f.id) === String(b.fixtureId));
-                      return (fixB ? new Date(fixB.date) : 0) - (fixA ? new Date(fixA.date) : 0);
-                    });
-                  return (
-                    <div className="space-y-6">
-                      <button className="flex items-center gap-1.5 text-[10px] text-white/50 uppercase tracking-widest hover:text-white transition-colors"
-                        onClick={() => setViewingParticipant(null)}>
-                        <ArrowLeft className="h-3 w-3" /> Participants
+              <div className="scroll-section scroll-section--over-video scroll-section--dimmed">
+                <div className="scroll-slide-inner px-4 w-full justify-between">
+                  <div className="flex-1 flex items-center justify-center w-full min-h-0 py-4">
+                    <div className="liquid-glass-strong p-8 w-full max-w-md rounded-[1.25rem] border border-white/10 shadow-2xl flex flex-col items-center">
+                      <div className="text-center mb-8">
+                        <div className="frozen-inner w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                          <Award className="h-7 w-7 text-white" />
+                        </div>
+                        <h3 className="font-heading italic text-white text-3xl tracking-tight uppercase">SECURE SIGN IN</h3>
+                        <p className="text-white/50 text-[11px] uppercase tracking-wider mt-1.5">Authenticate via Google to lock in your predictions</p>
+                      </div>
+
+                      <button
+                        className="btn-primary w-full py-3 rounded-full text-sm font-bold uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-50"
+                        onClick={handleGoogleSignIn}
+                        disabled={signingIn}
+                      >
+                        {signingIn ? (
+                          <div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+                        ) : (
+                          <svg className="h-5 w-5" viewBox="0 0 24 24"><path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" /><path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" /><path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" /><path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" /></svg>
+                        )}
+                        {signingIn ? "Signing in..." : "Continue with Google"}
                       </button>
 
-                      <div className="text-left">
-                        <h2 className="font-heading italic text-2xl uppercase tracking-tight text-white">{u.name}</h2>
-                        <p className="text-[10px] text-white/40 uppercase tracking-widest mt-1">{u.dept} • {u.year || "1st Year"}</p>
+                      <div className="frozen-inner rounded-xl p-3.5 text-left text-[11px] text-white/60 leading-relaxed w-full mt-4">
+                        🛡️ <strong>Secure &amp; Private:</strong> Google Sign-In ensures only you can access your predictions — no passwords stored.
                       </div>
+                    </div>
+                  </div>
 
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        <div className="liquid-glass p-4 rounded-xl border border-white/5 text-center">
-                          <span className="text-2xl font-bold text-white">{pPoints}</span>
-                          <p className="text-[9px] text-white/50 uppercase tracking-widest mt-1">Points</p>
-                        </div>
-                        <div className="liquid-glass p-4 rounded-xl border border-white/5 text-center">
-                          <span className="text-2xl font-bold text-white">#{rank}</span>
-                          <p className="text-[9px] text-white/50 uppercase tracking-widest mt-1">Rank</p>
-                        </div>
-                        <div className="liquid-glass p-4 rounded-xl border border-white/5 text-center">
-                          <span className="text-2xl font-bold text-white">{stats.totalPredictions}</span>
-                          <p className="text-[9px] text-white/50 uppercase tracking-widest mt-1">Predictions</p>
-                        </div>
-                        <div className="liquid-glass p-4 rounded-xl border border-white/5 text-center">
-                          <span className="text-2xl font-bold text-white">{stats.overallAccuracy}%</span>
-                          <p className="text-[9px] text-white/50 uppercase tracking-widest mt-1">Accuracy</p>
-                        </div>
-                      </div>
+                  <footer className="splash-footer shrink-0 w-full text-center pt-4">
+                    <p className="text-[10px] text-white/35 tracking-wide mb-2">say hi to me</p>
+                    <div className="flex items-center justify-center gap-4">
+                      <a href={CREATOR_LINKS.linkedin} target="_blank" rel="noopener noreferrer" className="text-white/30 hover:text-white/70 transition-colors" aria-label="LinkedIn">
+                        <IconLinkedIn className="h-3.5 w-3.5" />
+                      </a>
+                      <a href={CREATOR_LINKS.email} className="text-white/30 hover:text-white/70 transition-colors" aria-label="Email">
+                        <Mail className="h-3.5 w-3.5" strokeWidth={1.5} />
+                      </a>
+                      <a href={CREATOR_LINKS.github} target="_blank" rel="noopener noreferrer" className="text-white/30 hover:text-white/70 transition-colors" aria-label="GitHub">
+                        <IconGitHub className="h-3.5 w-3.5" />
+                      </a>
+                      <a href={CREATOR_LINKS.instagram} target="_blank" rel="noopener noreferrer" className="text-white/30 hover:text-white/70 transition-colors" aria-label="Instagram">
+                        <IconInstagram className="h-3.5 w-3.5" />
+                      </a>
+                    </div>
+                  </footer>
+                </div>
+              </div>
 
-                      <div className="liquid-glass p-6 rounded-xl border border-white/5 text-center">
-                        <h3 className="text-sm font-semibold text-white/80 mb-4 uppercase tracking-wider">Prediction Accuracy</h3>
-                        <div className="flex items-center justify-center gap-8">
-                          <svg width="120" height="120" viewBox="0 0 120 120" className="-rotate-90">
-                            <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="10" />
-                            <circle cx="60" cy="60" r="52" fill="none" stroke={stats.accuracy > 50 ? "#22c55e" : "#eab308"} strokeWidth="10"
-                              strokeDasharray={`${(stats.accuracy / 100) * 327} 327`}
-                              strokeLinecap="round" />
-                            <circle cx="60" cy="60" r="38" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="8" />
-                            <circle cx="60" cy="60" r="38" fill="none" stroke={stats.scorelineAccuracy > 50 ? "#3b82f6" : "#a855f7"} strokeWidth="8"
-                              strokeDasharray={`${(stats.scorelineAccuracy / 100) * 239} 239`}
-                              strokeLinecap="round" />
-                          </svg>
-                          <div className="text-left">
-                            <div className="flex items-center gap-3 mb-2">
-                              <span className="w-3 h-3 rounded-full bg-green-500" />
-                              <span className="text-xs text-white/70">Winner Correct: {stats.correctWinners}</span>
-                            </div>
-                            <div className="flex items-center gap-3 mb-2">
-                              <span className="w-3 h-3 rounded-full bg-white/20" />
-                              <span className="text-xs text-white/70">Winner Incorrect: {stats.scoredPredictions - stats.correctWinners}</span>
-                            </div>
-                            <div className="flex items-center gap-3 mb-2">
-                              <span className="w-3 h-3 rounded-full bg-blue-500" />
-                              <span className="text-xs text-white/70">Scoreline Correct: {stats.correctScorelines}</span>
-                            </div>
-                            <div className="flex items-center gap-3 mb-2">
-                              <span className="w-3 h-3 rounded-full bg-white/20" />
-                              <span className="text-xs text-white/70">Scoreline Incorrect: {stats.totalScorelinePreds - stats.correctScorelines}</span>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <span className="w-3 h-3 rounded-full bg-white/10" />
-                              <span className="text-xs text-white/70">Unscored: {stats.totalPredictions - stats.scoredPredictions}</span>
-                            </div>
+            </div>
+          </>
+        )}
+
+        {needsProfile && pendingAuthUser && (
+          <div className="fixed inset-0 z-[999] flex items-start sm:items-center justify-center p-4 overflow-y-auto" style={{ background: "rgba(0,0,0,0.92)", backdropFilter: "blur(18px)" }}>
+            <div className="w-full max-w-md my-4">
+              <div className="liquid-glass-strong rounded-[1.5rem] border border-white/15 shadow-2xl overflow-hidden">
+                <div className="bg-gradient-to-r from-green-900/60 to-emerald-900/40 border-b border-white/10 px-8 pt-8 pb-6 text-center">
+                  {pendingAuthUser.user_metadata?.avatar_url ? (
+                    <img src={pendingAuthUser.user_metadata.avatar_url} alt="Profile" className="w-20 h-20 rounded-full border-4 border-white/20 mx-auto mb-4 shadow-xl" />
+                  ) : (
+                    <div className="w-20 h-20 rounded-full bg-white/10 border border-white/20 flex items-center justify-center mx-auto mb-4">
+                      <User className="h-8 w-8 text-white" />
+                    </div>
+                  )}
+                  <div className="inline-flex items-center gap-1.5 bg-green-500/20 border border-green-500/30 px-3 py-1 rounded-full mb-3">
+                    <CheckCircle className="h-3 w-3 text-green-400" />
+                    <span className="text-green-400 text-[10px] font-bold uppercase tracking-widest">Google Verified</span>
+                  </div>
+                  <h2 className="font-heading italic text-white text-2xl uppercase tracking-tight leading-tight">One Last Step</h2>
+                  <p className="text-white/50 text-xs mt-1">
+                    Hey <span className="text-white font-semibold">{pendingAuthUser.user_metadata?.full_name?.split(" ")[0] || "there"}</span>, complete your campus profile to enter the arena.
+                  </p>
+                </div>
+                <div className="px-8 py-6 space-y-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-white/70 uppercase tracking-widest mb-1.5">Full Name</label>
+                    <input className="input-glass w-full px-4 py-3 rounded-xl text-sm" placeholder="e.g. Rahul Sharma"
+                      value={registerName} onChange={e => setRegisterName(e.target.value)}
+                      onKeyDown={e => e.key === "Enter" && document.getElementById("reg-dept")?.focus()} />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-white/70 uppercase tracking-widest mb-1.5">Department</label>
+                    <input id="reg-dept" className="input-glass w-full px-4 py-3 rounded-xl text-sm" placeholder="e.g. Computer Science"
+                      value={registerDept} onChange={e => setRegisterDept(e.target.value)}
+                      onKeyDown={e => e.key === "Enter" && handleCompleteRegistration()} />
+                    <p className="text-[9px] text-white/35 mt-1 pl-1">Type your full department name</p>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-white/70 uppercase tracking-widest mb-1.5">Year of Study</label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {STUDY_YEARS.map(y => (
+                        <button key={y}
+                          className={`py-2.5 rounded-xl text-xs font-bold uppercase border transition-all ${registerYear === y ? "bg-white text-black border-white" : "bg-white/5 border-white/10 text-white/60 hover:text-white hover:border-white/30"}`}
+                          onClick={() => setRegisterYear(y)}>
+                          {y.replace(" Year", "")}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <button className="btn-primary w-full py-3.5 rounded-full text-sm font-bold uppercase tracking-widest mt-2 flex items-center justify-center gap-2" onClick={handleCompleteRegistration}>
+                    <CheckCircle className="h-4 w-4" />
+                    Complete & Enter Arena
+                  </button>
+                  <button className="text-[10px] text-white/30 uppercase tracking-widest block mx-auto text-center hover:text-white/60 transition-colors" onClick={() => { setNeedsProfile(false); handleLogout(); }}>
+                    ← Back to Sign In
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+
+        {currentUser && !needsProfile && (
+          <div className="max-w-3xl mx-auto px-4 h-screen flex flex-col pt-4 relative z-10 no-scrollbar">
+            <header className="liquid-glass rounded-[1.25rem] border border-white/10 mb-2 shrink-0">
+              <div className="flex items-center justify-between p-4">
+                <div className="flex items-center gap-2 select-none">
+                  <span className="text-xl">🏆</span>
+                  <span className="font-heading italic text-xl tracking-tight text-white uppercase font-bold">PREDIZONE</span>
+                </div>
+                <div className="flex items-center">
+                  {!isAdmin && (
+                    <button className="p-2 rounded-lg text-white/40 hover:text-white/80 transition-colors" onClick={() => setIsMuted(v => !v)} title={isMuted ? "Unmute" : "Mute"}>
+                      {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                    </button>
+                  )}
+                  <button className="p-2 rounded-lg text-red-400 hover:bg-white/5 transition-colors" onClick={handleLogout} title="Logout">
+                    <LogOut className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+              <div ref={tabBarRef} className="flex gap-1 px-3 pb-3 overflow-x-auto no-scrollbar">
+                {!isAdmin ? (
+                  <>
+                    <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "fixtures" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => setUserTab("fixtures")}>
+                      <Target className="h-3 w-3 inline mr-1" />Predict
+                    </button>
+                    <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "stream" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => setUserTab("stream")}>
+                      <span className={userTab !== "stream" ? "blink-pulse" : ""}><Tv className="h-3 w-3 inline mr-1" />Stream</span>
+                    </button>
+                    <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "upcoming" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => setUserTab("upcoming")}>
+                      <Calendar className="h-3 w-3 inline mr-1" />All
+                    </button>
+                    <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "finished" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => setUserTab("finished")}>
+                      <CheckCircle className="h-3 w-3 inline mr-1" />Finished
+                    </button>
+                    <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "leaderboard" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => setUserTab("leaderboard")}>
+                      <Trophy className="h-3 w-3 inline mr-1" />Standings
+                    </button>
+                    <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "you" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => setUserTab("you")}>
+                      <User className="h-3 w-3 inline mr-1" />You
+                    </button>
+                  </>
+                ) : (
+                  <span className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white/60">Admin Console</span>
+                )}
+              </div>
+              <p className="text-[9px] text-white/20 text-center mt-2 sm:hidden select-none">swipe →</p>
+            </header>
+            <audio ref={audioRef} src={BG_MUSIC_SRC} loop autoPlay />
+            <div ref={scrollContainerRef} className="flex-1 overflow-y-auto no-scrollbar flex flex-col" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 50px)" }} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
+              <div ref={swipeContainerRef} className="flex flex-col min-h-0" style={{ transform: `translateX(${swipeOffset}px)`, opacity: Math.max(0, 1 - Math.abs(swipeOffset) / 400), transition: pullTouch.current.swiping ? "none" : "transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1)" }}>
+                <motion.div key={isAdmin ? adminTab : userTab} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.15 }} className="flex flex-col min-h-0">
+
+                  {pullDistance > 0 && (
+                    <div className="flex items-center justify-center py-2 transition-all duration-100" style={{ opacity: Math.min(pullDistance / 50, 1), transform: `translateY(${pullDistance * 0.5}px)` }}>
+                      <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full" />
+                    </div>
+                  )}
+
+                  {!isAdmin && (
+                    <div className="liquid-glass px-5 py-6 sm:px-6 sm:py-8 rounded-[1.25rem] border border-white/5 mb-6 min-h-[100px] md:min-h-[110px] overflow-hidden cursor-pointer" onClick={() => setUserTab("you")}>
+                      <div className="flex flex-row items-center gap-3 sm:gap-0 sm:justify-between">
+                        <div className="flex items-center gap-3 text-left min-w-0 flex-shrink">
+                          {currentUser.photoURL ? (
+                            <img src={currentUser.photoURL} alt={currentUser.name} className="w-10 h-10 rounded-full border border-white/20 shrink-0" />
+                          ) : (
+                            <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center border border-white/15 shrink-0"><User className="h-4 w-4 text-white" /></div>
+                          )}
+                          <div className="min-w-0">
+                            <h3 className="text-sm font-semibold text-white/95 flex items-center gap-1 truncate">{currentUser.favoriteTeam && <span className="text-base">{fl(currentUser.favoriteTeam)}</span>}{currentUser.name} <Zap className="h-3.5 w-3.5 text-amber-400 fill-current shrink-0" /></h3>
+                            <span className="text-[10px] text-white/40 uppercase tracking-widest mt-0.5 block truncate">{currentUser.dept} • {currentUser.year || "1st Year"} • {currentUser.email}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+                          {isLockedGlobal && <div className="bg-amber-950/60 border border-amber-800/50 px-3 py-1 rounded-full shrink-0"><Lock className="h-3 w-3 inline text-amber-400 mr-1" /><span className="text-amber-400 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">Predictions Locked</span></div>}
+                          <div className="text-left sm:text-right shrink-0">
+                            <span className="text-[10px] text-white/50 uppercase tracking-widest block mb-0.5">Your Points</span>
+                            <span className="font-heading italic text-2xl text-white tracking-tight">{leaderboard.find(l => l.id === currentUser.id)?.points || 0} PTS</span>
                           </div>
                         </div>
                       </div>
+                    </div>
+                  )}
 
-                      <div className="text-left">
-                        <h3 className="font-heading italic text-xl uppercase tracking-tight text-white mb-4">Prediction History</h3>
+                  {/* ─── USER: Fixtures / Predict ─── */}
+                  {userTab === "fixtures" && !isAdmin && (() => {
+                    const openFixtures = sortedFixtures.filter(f => {
+                      const s = getStatus(f, isLockedGlobal);
+                      return (s === "open" || (s === "played" && !results[f.id])) && !results[f.id];
+                    });
+                    return (
+                      <div className="space-y-4">
+                        <div className="text-left mb-6">
+                          <h2 className="font-heading italic text-3xl uppercase tracking-tight text-white">OPEN PREDICTIONS</h2>
+                          <p className="text-xs text-white/50 mt-1 uppercase tracking-wider">{openFixtures.length} matches available</p>
+                        </div>
+
+                        {openFixtures.length > 0 ? openFixtures.map(fix => {
+                          const status = getStatus(fix, isLockedGlobal);
+                          const key = `${currentUser.id}_${fix.id}`;
+                          const myPred = predictions[key];
+                          const res = results[fix.id];
+                          const pts = myPred && res ? calcPoints(myPred, res, fix) : null;
+                          const canPredict = status === "open" && !myPred;
+                          const isGold = currentUser?.favoriteTeam && (fix.home === currentUser.favoriteTeam || fix.away === currentUser.favoriteTeam);
+                          return (
+                            <div key={fix.id} className={`liquid-glass p-6 rounded-[1.5rem] border ${isGold ? "card-gold" : "border-white/10"} text-center`}>
+                              <div className="flex justify-between items-center mb-4">
+                                <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest">{fix.isKnockout ? fix.round : `Group ${fix.group}`}</span>
+                                <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${status === "open" ? "bg-green-950 text-green-400 border border-green-800" : status === "played" ? "bg-blue-950 text-blue-400 border border-blue-800" : "bg-amber-950/80 text-amber-400 border border-amber-900"}`}>{status}</span>
+                              </div>
+                              <div className="flex items-center justify-between my-6 max-w-sm mx-auto w-full">
+                                <div className="text-center flex-1">
+                                  <span className="text-5xl block mb-2">{fl(fix.home)}</span>
+                                  <span className="text-sm font-semibold text-white/90">{fix.home}</span>
+                                </div>
+                                <div className="flex flex-col items-center px-4">
+                                  <span className="font-heading italic text-lg text-white/30 uppercase tracking-widest">VS</span>
+                                  <span className="text-[10px] text-white/30 mt-2">{new Date(fix.date).toLocaleDateString("en-IN", { weekday: "short" })}</span>
+                                </div>
+                                <div className="text-center flex-1">
+                                  <span className="text-5xl block mb-2">{fl(fix.away)}</span>
+                                  <span className="text-sm font-semibold text-white/90">{fix.away}</span>
+                                </div>
+                              </div>
+                              <p className="text-[10px] text-white/40 mb-5">{formatDate(fix.date)} &nbsp;•&nbsp; {fix.venue}</p>
+
+                              {res ? (
+                                <div className="relative frozen-inner rounded-xl p-4 max-w-xs mx-auto">
+                                  <div className="flex items-center justify-center gap-6 mb-2">
+                                    <div className={`text-center relative ${res.winner === fix.home ? "scale-110" : "opacity-60"}`}>
+                                      <span className="text-4xl block mb-1">{fl(fix.home)}</span>
+                                      <span className="text-[10px] font-semibold text-white/90 block">{fix.home}</span>
+                                      {res.winner === fix.home && (
+                                        <>
+                                          {[...Array(6)].map((_, i) => (
+                                            <div key={`c${i}`} className="confetti-piece" style={{
+                                              left: `${10 + i * 14}%`, top: `${10 + (i % 2) * 30}%`,
+                                              background: `hsl(${i * 60}, 80%, 60%)`,
+                                              animationDelay: `${i * 0.15}s`,
+                                            }} />
+                                          ))}
+                                          {[...Array(4)].map((_, i) => (
+                                            <div key={`f${i}`} className="firecracker" style={{
+                                              left: `${30 + i * 14}%`, top: `${5 + i * 8}%`,
+                                              background: `hsl(${i * 90 + 20}, 90%, 60%)`,
+                                              animationDelay: `${i * 0.2}s`,
+                                            }} />
+                                          ))}
+                                        </>
+                                      )}
+                                    </div>
+                                    <div className="text-center font-heading italic text-2xl text-white">
+                                      {res.homeGoals ?? "?"}–{res.awayGoals ?? "?"}
+                                    </div>
+                                    <div className={`text-center relative ${res.winner === fix.away ? "scale-110" : "opacity-60"}`}>
+                                      <span className="text-4xl block mb-1">{fl(fix.away)}</span>
+                                      <span className="text-[10px] font-semibold text-white/90 block">{fix.away}</span>
+                                      {res.winner === fix.away && (
+                                        <>
+                                          {[...Array(6)].map((_, i) => (
+                                            <div key={`c${i}`} className="confetti-piece" style={{
+                                              left: `${10 + i * 14}%`, top: `${10 + (i % 2) * 30}%`,
+                                              background: `hsl(${i * 60 + 30}, 80%, 60%)`,
+                                              animationDelay: `${i * 0.15}s`,
+                                            }} />
+                                          ))}
+                                          {[...Array(4)].map((_, i) => (
+                                            <div key={`f${i}`} className="firecracker" style={{
+                                              left: `${30 + i * 14}%`, top: `${5 + i * 8}%`,
+                                              background: `hsl(${i * 90 + 50}, 90%, 60%)`,
+                                              animationDelay: `${i * 0.2}s`,
+                                            }} />
+                                          ))}
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+                                  {pts !== null && (
+                                    <div className="text-center mb-2">
+                                      <span className={`font-semibold px-3 py-1 rounded-full text-xs ${pts > 0 ? "bg-green-950 text-green-400" : "frozen-tag text-white/40"}`}>{pts > 0 ? `+${pts} PTS` : "0 PTS"}</span>
+                                    </div>
+                                  )}
+                                  {(() => {
+                                    const stats = getFixturePredictionStats(fix.id, predictions, fix.home, fix.away);
+                                    if (!stats || stats.bars.length === 0) return null;
+                                    return (
+                                      <div className="mt-3 pt-3 border-t border-white/10">
+                                        <p className="text-[9px] text-white/40 uppercase tracking-wider text-center mb-2">Prediction Distribution</p>
+                                        <div className="space-y-1.5">
+                                          {stats.bars.map((bar, bi) => (
+                                            <div key={`${bar.team}-${bi}`} className="flex items-center gap-2">
+                                              <span className="text-[8px] text-white/50 w-10 text-right leading-tight truncate shrink-0">{bar.team === fix.home ? fix.home : bar.team === fix.away ? fix.away : "Draw"}</span>
+                                              <div className="flex-1 h-4 rounded-full bg-white/5 overflow-hidden">
+                                                <div className="h-full rounded-full transition-all duration-500" style={{
+                                                  width: `${bar.pct}%`,
+                                                  background: bar.team === fix.home ? "#22c55e" : bar.team === fix.away ? "#3b82f6" : "#ffffff",
+                                                }} />
+                                              </div>
+                                              <span className="text-[9px] font-bold text-white/70 w-8 text-left shrink-0">{bar.pct}%</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
+                                </div>
+                              ) : status === "played" ? (
+                                <div className="frozen-inner rounded-xl p-4 max-w-xs mx-auto">
+                                  {(() => {
+                                    const stats = getFixturePredictionStats(fix.id, predictions, fix.home, fix.away);
+                                    if (!stats || stats.bars.length === 0) return <p className="text-[10px] text-white/40 text-center">No predictions yet</p>;
+                                    return (
+                                      <div>
+                                        <p className="text-[9px] text-white/40 uppercase tracking-wider text-center mb-3">Prediction Distribution</p>
+                                        <div className="space-y-1.5">
+                                          {stats.bars.map((bar, bi) => (
+                                            <div key={`${bar.team}-${bi}`} className="flex items-center gap-2">
+                                              <span className="text-[8px] text-white/50 w-10 text-right leading-tight truncate shrink-0">{bar.team === fix.home ? fix.home : bar.team === fix.away ? fix.away : "Draw"}</span>
+                                              <div className="flex-1 h-4 rounded-full bg-white/5 overflow-hidden">
+                                                <div className="h-full rounded-full transition-all duration-500" style={{
+                                                  width: `${bar.pct}%`,
+                                                  background: bar.team === fix.home ? "#22c55e" : bar.team === fix.away ? "#3b82f6" : "#ffffff",
+                                                }} />
+                                              </div>
+                                              <span className="text-[9px] font-bold text-white/70 w-8 text-left shrink-0">{bar.pct}%</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                        <p className="text-[9px] text-white/30 text-center mt-2">{stats.total} total predictions</p>
+                                      </div>
+                                    );
+                                  })()}
+                                  {myPred ? (
+                                    <div className="mt-3 pt-2 border-t border-white/10 text-center">
+                                      <span className="text-[9px] text-white/50 uppercase tracking-wider">Your prediction: </span>
+                                      <span className="text-[10px] font-semibold text-white">{formatPredictionSummary(myPred, fix)}</span>
+                                    </div>
+                                  ) : (
+                                    <div className="mt-3 pt-2 border-t border-white/10 text-center">
+                                      <span className="text-[9px] text-white/40 italic">You didn't predict this match</span>
+                                    </div>
+                                  )}
+                                </div>
+                              ) : null}
+
+                              {!res && status !== "played" && myPred && (
+                                <div className="frozen-inner rounded-xl p-4 text-sm max-w-xs mx-auto">
+                                  <span className="text-white/50 text-xs">Your prediction: </span>
+                                  <span className="font-semibold text-white">{formatPredictionSummary(myPred, fix)}</span>
+                                  <span className="text-[10px] text-white/40 font-bold uppercase tracking-wider ml-2">🔒 Locked</span>
+                                </div>
+                              )}
+
+                              {canPredict && (
+                                <button className="btn-primary px-10 py-3 rounded-full text-sm font-bold uppercase tracking-wider" onClick={() => { setPredFixture(fix); setPredWinner(""); setPredHomeGoals(""); setPredAwayGoals(""); }}>
+                                  Make Prediction
+                                </button>
+                              )}
+
+                              {status === "locked" && !myPred && (
+                                <div className="frozen-inner rounded-xl p-4 text-xs text-white/50 max-w-xs mx-auto flex items-center gap-2 justify-center">
+                                  <Lock className="h-3 w-3" /> Predictions open 24h before match, lock 30min before kickoff
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }) : (
+                          <div className="liquid-glass rounded-[1.5rem] p-12 text-center border border-white/5">
+                            <span className="text-5xl mb-4 block">📅</span>
+                            <h3 className="font-heading italic text-2xl text-white/70">No Matches Available</h3>
+                            <p className="text-xs text-white/40 max-w-sm mx-auto mt-3 leading-relaxed">No fixtures scheduled. Check the upcoming tab for future matches.</p>
+                            <button className="btn-secondary mt-6 px-6 py-2.5 rounded-full text-xs font-semibold uppercase tracking-wider" onClick={() => setUserTab("upcoming")}>View Upcoming</button>
+                          </div>
+                        )}
                       </div>
-                      {pPredsList.length === 0 ? (
-                        <div className="liquid-glass rounded-xl p-8 text-center border border-white/5">
-                          <span className="text-3xl block mb-2">🔮</span>
-                          <p className="text-xs text-white/50">No predictions yet</p>
+                    );
+                  })()}
+
+                  {/* ─── USER: Stream Poll ─── */}
+                  {userTab === "stream" && !isAdmin && (() => {
+                    const myResponse = currentUser ? streamResponses[currentUser.id] : null;
+                    const yesCount = Object.values(streamResponses).filter(r => r.response === "yes").length;
+                    const noCount = Object.values(streamResponses).filter(r => r.response === "no").length;
+                    const total = yesCount + noCount;
+                    return (
+                      <div className="space-y-4">
+                        <div className="text-left mb-6">
+                          <h2 className="font-heading italic text-3xl uppercase tracking-tight text-white">LIVE STREAM</h2>
+                          <p className="text-xs text-white/50 mt-1 uppercase tracking-wider">Would you like live streaming of matches here?</p>
+                        </div>
+                        <div className="liquid-glass p-6 rounded-xl border border-white/5 text-center">
+                          {currentUser && !myResponse ? (
+                            <>
+                              <h3 className="font-heading italic text-xl text-white mb-6">Would you like live streaming of World Cup matches here?</h3>
+                              <div className="flex gap-4 justify-center">
+                                <button className="btn-primary px-8 py-3 rounded-full text-sm uppercase tracking-widest font-bold bg-green-600 hover:bg-green-500" onClick={async () => { try { await submitStreamResponse(currentUser.id, "yes"); setStreamResponses(prev => ({ ...prev, [currentUser.id]: { user_id: currentUser.id, response: "yes", submitted_at: new Date().toISOString() } })); } catch (e) { showToast("Failed to submit vote", "error"); } }}>
+                                  Yes
+                                </button>
+                                <button className="btn-primary px-8 py-3 rounded-full text-sm uppercase tracking-widest font-bold bg-red-600 hover:bg-red-500" onClick={async () => { try { await submitStreamResponse(currentUser.id, "no"); setStreamResponses(prev => ({ ...prev, [currentUser.id]: { user_id: currentUser.id, response: "no", submitted_at: new Date().toISOString() } })); } catch (e) { showToast("Failed to submit vote", "error"); } }}>
+                                  No
+                                </button>
+                              </div>
+                            </>
+                          ) : (
+                            <div>
+                              <h3 className="font-heading italic text-lg text-white mb-2">You voted: <span className={myResponse?.response === "yes" ? "text-green-400" : "text-red-400"}>{myResponse?.response === "yes" ? "Yes" : "No"}</span></h3>
+                              {total > 0 && (
+                                <div className="w-full bg-white/10 rounded-full h-4 mt-4 overflow-hidden flex">
+                                  <div className="bg-green-500 h-full transition-all" style={{ width: `${(yesCount / total) * 100}%` }} />
+                                  <div className="bg-red-500 h-full transition-all" style={{ width: `${(noCount / total) * 100}%` }} />
+                                </div>
+                              )}
+                              <div className="flex justify-center gap-8 mt-4 text-sm">
+                                <span className="text-green-400 font-semibold">{yesCount} Yes ({total > 0 ? Math.round((yesCount / total) * 100) : 0}%)</span>
+                                <span className="text-red-400 font-semibold">{noCount} No ({total > 0 ? Math.round((noCount / total) * 100) : 0}%)</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        <p className="text-[9px] text-white/30 text-center">One vote per person. Results will reset after 12 hours.</p>
+                      </div>
+                    );
+                  })()}
+
+                  {/* ─── USER: All Fixtures ─── */}
+                  {userTab === "upcoming" && !isAdmin && (
+                    <div className="space-y-4">
+                      <div className="text-left mb-6">
+                        <h2 className="font-heading italic text-3xl uppercase tracking-tight text-white">ALL FIXTURES</h2>
+                        <p className="text-xs text-white/50 mt-1 uppercase tracking-wider">{upcomingFiltered.length} matches</p>
+                      </div>
+                      {upcomingFiltered.length === 0 ? (
+                        <div className="liquid-glass rounded-[1.5rem] p-12 text-center border border-white/5">
+                          <span className="text-4xl mb-4 block">📅</span>
+                          <h3 className="font-heading italic text-xl text-white/70">No Fixtures</h3>
+                          <p className="text-xs text-white/40 max-w-sm mx-auto mt-2">No matches have been added yet.</p>
                         </div>
                       ) : (
-                        <div className="space-y-2">
-                          {pPredsList.map(pred => {
-                            const fix = allFixtures.find(f => String(f.id) === String(pred.fixtureId));
-                            const res = results[pred.fixtureId];
-                            const pts = fix && res ? calcPoints(pred, res, fix) : null;
-                            const isGold = fix && currentUser?.favoriteTeam && (fix.home === currentUser.favoriteTeam || fix.away === currentUser.favoriteTeam);
-                            return (
-                              <div key={pred.id || `${pred.uid}_${pred.fixtureId}`} className={`liquid-glass p-4 rounded-xl border ${isGold ? "card-gold" : "border-white/5"}`}>
-                                <div className="flex justify-between items-start">
+                        upcomingFiltered.map(fix => {
+                          const status = getStatus(fix, isLockedGlobal);
+                          const key = `${currentUser.id}_${fix.id}`;
+                          const myPred = predictions[key];
+                          const res = results[fix.id];
+                          const pts = res && myPred ? calcPoints(myPred, res, fix) : null;
+                          const isGold = currentUser?.favoriteTeam && (fix.home === currentUser.favoriteTeam || fix.away === currentUser.favoriteTeam);
+                          return (
+                            <div key={fix.id} className={`liquid-glass p-4 rounded-xl border ${isGold ? "card-gold" : "border-white/5"} flex items-center justify-between text-left`}>
+                              <div className="flex items-center gap-4 flex-1">
+                                <div className="text-center min-w-[50px]">
+                                  <span className="text-xs font-semibold text-white/70 block">{new Date(fix.date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</span>
+                                  <span className="text-[9px] text-white/40">{new Date(fix.date).toLocaleDateString("en-IN", { weekday: "short" })}</span>
+                                </div>
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-lg">{fl(fix.home)}</span>
+                                    <span className="text-xs font-semibold text-white/90">{fix.home}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <span className="text-lg">{fl(fix.away)}</span>
+                                    <span className="text-xs font-semibold text-white/90">{fix.away}</span>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                {status === "played" && res ? (
                                   <div>
-                                    <p className="text-xs font-semibold text-white">
-                                      {fix ? `${fl(fix.home)} ${fix.home} vs ${fix.away} ${fl(fix.away)}` : `Match #${pred.fixtureId}`}
-                                    </p>
-                                    <p className="text-[10px] text-white/40 mt-1">
-                                      {fix ? formatDate(fix.date) : ""}
-                                      {pred.submittedAt && ` • Predicted: ${new Date(pred.submittedAt?.toMillis ? pred.submittedAt.toMillis() : pred.submittedAt).toLocaleString("en-IN")}`}
-                                    </p>
+                                    <p className="text-xs font-bold text-white/90">{res.homeGoals ?? "?"}–{res.awayGoals ?? "?"}</p>
+                                    <p className="text-[8px] text-white/40 uppercase tracking-wider mt-0.5">FT</p>
+                                    {pts !== null && <p className={`text-[9px] font-bold mt-1 ${pts > 0 ? "text-green-400" : "text-white/40"}`}>{pts > 0 ? `+${pts}` : "0"} PTS</p>}
                                   </div>
-                                  <div className="text-right">
-                                    <p className="text-[10px] text-white/70 font-semibold">{formatPredictionSummary(pred, fix)}</p>
-                                    {pts !== null && <p className={`text-[10px] font-bold mt-1 ${pts > 0 ? "text-green-400" : "text-white/40"}`}>{pts > 0 ? `+${pts} PTS` : "0 PTS"}</p>}
-                                    {res && <p className="text-[9px] text-white/40 mt-0.5">Result: {formatResultSummary(res, fix)}</p>}
+                                ) : (
+                                  <>
+                                    <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${status === "open" ? "bg-green-950 text-green-400 border border-green-800" : "bg-amber-950/80 text-amber-400 border border-amber-900"}`}>{status}</span>
+                                    {myPred && <p className="text-[9px] text-white/40 mt-1">✓ Predicted</p>}
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+
+                  {/* ─── USER: Finished Matches ─── */}
+                  {userTab === "finished" && !isAdmin && (() => {
+                    return (
+                      <div className="space-y-4">
+                        <div className="text-left mb-6">
+                          <h2 className="font-heading italic text-3xl uppercase tracking-tight text-white">FINISHED MATCHES</h2>
+                          <p className="text-xs text-white/50 mt-1 uppercase tracking-wider">{finishedFixtures.filter(f => results[f.id]).length} matches played</p>
+                        </div>
+                        {finishedFixtures.length === 0 ? (
+                          <div className="liquid-glass rounded-[1.5rem] p-12 text-center border border-white/5">
+                            <span className="text-4xl mb-4 block">📅</span>
+                            <h3 className="font-heading italic text-xl text-white/70">No Finished Matches</h3>
+                            <p className="text-xs text-white/40 max-w-sm mx-auto mt-2">Completed matches will appear here.</p>
+                          </div>
+                        ) : (
+                          [...finishedFixtures.filter(f => results[f.id])].reverse().map(fix => {
+                            const key = `${currentUser.id}_${fix.id}`;
+                            const myPred = predictions[key];
+                            const res = results[fix.id];
+                            const pts = res && myPred ? calcPoints(myPred, res, fix) : null;
+                            const isGold = currentUser?.favoriteTeam && (fix.home === currentUser.favoriteTeam || fix.away === currentUser.favoriteTeam);
+                            return (
+                              <div key={fix.id} className={`liquid-glass p-6 rounded-[1.5rem] border ${isGold ? "card-gold" : "border-white/10"} text-center`}>
+                                <div className="flex justify-between items-center mb-4">
+                                  <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest">{fix.isKnockout ? fix.round : `Group ${fix.group}`}</span>
+                                  <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-950 text-blue-400 border border-blue-800">FT</span>
+                                </div>
+                                <p className="text-[10px] text-white/40 mb-4">{formatDate(fix.date)}</p>
+                                <div className="relative frozen-inner rounded-xl p-4 max-w-xs mx-auto">
+                                  <div className="flex items-center justify-center gap-6 mb-2">
+                                    <div className={`text-center relative ${res.winner === fix.home ? "scale-110" : "opacity-60"}`}>
+                                      <span className="text-4xl block mb-1">{fl(fix.home)}</span>
+                                      <span className="text-[10px] font-semibold text-white/90 block">{fix.home}</span>
+                                      {res.winner === fix.home && (
+                                        <>
+                                          {[...Array(6)].map((_, i) => (
+                                            <div key={`c${i}`} className="confetti-piece" style={{
+                                              left: `${10 + i * 14}%`, top: `${10 + (i % 2) * 30}%`,
+                                              background: `hsl(${i * 60}, 80%, 60%)`,
+                                              animationDelay: `${i * 0.15}s`,
+                                            }} />
+                                          ))}
+                                          {[...Array(4)].map((_, i) => (
+                                            <div key={`f${i}`} className="firecracker" style={{
+                                              left: `${30 + i * 14}%`, top: `${5 + i * 8}%`,
+                                              background: `hsl(${i * 90 + 20}, 90%, 60%)`,
+                                              animationDelay: `${i * 0.2}s`,
+                                            }} />
+                                          ))}
+                                        </>
+                                      )}
+                                    </div>
+                                    <div className="text-center font-heading italic text-2xl text-white">
+                                      {res.homeGoals ?? "?"}–{res.awayGoals ?? "?"}
+                                    </div>
+                                    <div className={`text-center relative ${res.winner === fix.away ? "scale-110" : "opacity-60"}`}>
+                                      <span className="text-4xl block mb-1">{fl(fix.away)}</span>
+                                      <span className="text-[10px] font-semibold text-white/90 block">{fix.away}</span>
+                                      {res.winner === fix.away && (
+                                        <>
+                                          {[...Array(6)].map((_, i) => (
+                                            <div key={`c${i}`} className="confetti-piece" style={{
+                                              left: `${10 + i * 14}%`, top: `${10 + (i % 2) * 30}%`,
+                                              background: `hsl(${i * 60 + 30}, 80%, 60%)`,
+                                              animationDelay: `${i * 0.15}s`,
+                                            }} />
+                                          ))}
+                                          {[...Array(4)].map((_, i) => (
+                                            <div key={`f${i}`} className="firecracker" style={{
+                                              left: `${30 + i * 14}%`, top: `${5 + i * 8}%`,
+                                              background: `hsl(${i * 90 + 50}, 90%, 60%)`,
+                                              animationDelay: `${i * 0.2}s`,
+                                            }} />
+                                          ))}
+                                        </>
+                                      )}
+                                    </div>
                                   </div>
+                                  {pts !== null && (
+                                    <div className="text-center mb-2">
+                                      <span className={`font-semibold px-3 py-1 rounded-full text-xs ${pts > 0 ? "bg-green-950 text-green-400" : "frozen-tag text-white/40"}`}>{pts > 0 ? `+${pts} PTS` : "0 PTS"}</span>
+                                    </div>
+                                  )}
+                                  {(() => {
+                                    const stats = getFixturePredictionStats(fix.id, predictions, fix.home, fix.away);
+                                    if (!stats || stats.bars.length === 0) return null;
+                                    return (
+                                      <div className="mt-3 pt-3 border-t border-white/10">
+                                        <p className="text-[9px] text-white/40 uppercase tracking-wider text-center mb-2">Prediction Distribution</p>
+                                        <div className="space-y-1.5">
+                                          {stats.bars.map((bar, bi) => (
+                                            <div key={`${bar.team}-${bi}`} className="flex items-center gap-2">
+                                              <span className="text-[8px] text-white/50 w-10 text-right leading-tight truncate shrink-0">{bar.team === fix.home ? fix.home : bar.team === fix.away ? fix.away : "Draw"}</span>
+                                              <div className="flex-1 h-4 rounded-full bg-white/5 overflow-hidden">
+                                                <div className="h-full rounded-full transition-all duration-500" style={{
+                                                  width: `${bar.pct}%`,
+                                                  background: bar.team === fix.home ? "#22c55e" : bar.team === fix.away ? "#3b82f6" : "#ffffff",
+                                                }} />
+                                              </div>
+                                              <span className="text-[9px] font-bold text-white/70 w-8 text-left shrink-0">{bar.pct}%</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
+                                </div>
+                              </div>
+                            );
+                          })
+                        )
+                        }
+                      </div>
+                    );
+                  })()}
+
+                  {/* ─── USER: Leaderboard ─── */}
+                  {userTab === "leaderboard" && !isAdmin && (
+                    <div>
+                      <div className="text-left mb-6">
+                        <h2 className="font-heading italic text-3xl uppercase tracking-tight text-white">CAMPUS LEADERBOARD</h2>
+                        <p className="text-xs text-white/50 mt-1 uppercase tracking-wider">{leaderboard.filter(u => !u.isAdmin).length} students registered</p>
+                      </div>
+                      <div className="space-y-2">
+                        {leaderboard.filter(u => !u.isAdmin).map((u, i) => {
+                          const isMe = u.id === currentUser.id;
+                          return (
+                            <div key={u.id} className={`liquid-glass p-4 rounded-xl flex items-center gap-4 ${isMe ? "card-gold" : "border border-white/5"}`}>
+                              <span className="font-heading italic text-lg font-bold w-10 text-center text-white/60">
+                                {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`}
+                              </span>
+                              {u.photoURL ? (
+                                <img src={u.photoURL} alt={u.name} className="w-9 h-9 rounded-full border border-white/10" />
+                              ) : (
+                                <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center border border-white/15"><User className="h-3.5 w-3.5 text-white/70" /></div>
+                              )}
+                              <div className="flex-1 text-left">
+                                <h4 className="text-sm font-semibold text-white leading-tight">
+                                  {u.favoriteTeam && <span className="inline-block mr-1.5 align-middle text-base">{fl(u.favoriteTeam)}</span>}
+                                  {u.name} {isMe && <span className="text-[10px] text-white/55 font-normal ml-1">(You)</span>}
+                                </h4>
+                                <p className="text-[10px] text-white/40 uppercase tracking-widest mt-0.5">{u.dept} • {u.year || "1st Year"}</p>
+                              </div>
+                              <span className="font-heading italic text-lg text-white font-bold">{u.points} PTS</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ─── USER: You (Profile & Stats) ─── */}
+                  {userTab === "you" && !isAdmin && (() => {
+                    const stats = getUserStats(currentUser.id, predictions, results, allFixtures);
+                    const nonAdminLeaderboard = leaderboard.filter(u => !u.isAdmin);
+                    const myLeader = nonAdminLeaderboard.find(l => l.id === currentUser.id);
+                    const myPoints = myLeader?.points || 0;
+                    const rank = nonAdminLeaderboard.findIndex(l => l.id === currentUser.id) + 1;
+                    const myPredsList = Object.values(predictions).filter(p => p.uid === currentUser.id)
+                      .sort((a, b) => {
+                        const fixA = allFixtures.find(f => String(f.id) === String(a.fixtureId));
+                        const fixB = allFixtures.find(f => String(f.id) === String(b.fixtureId));
+                        return (fixB ? new Date(fixB.date) : 0) - (fixA ? new Date(fixA.date) : 0);
+                      });
+                    return (
+                      <div className="space-y-6 pb-[10px]">
+                        <div className="text-left mb-2">
+                          <h2 className="font-heading italic text-3xl uppercase tracking-tight text-white">YOUR STATS</h2>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          <div className="liquid-glass p-4 rounded-xl border border-white/5 text-center">
+                            <span className="text-2xl font-bold text-white">{myPoints}</span>
+                            <p className="text-[9px] text-white/50 uppercase tracking-widest mt-1">Points</p>
+                          </div>
+                          <div className="liquid-glass p-4 rounded-xl border border-white/5 text-center">
+                            <span className="text-2xl font-bold text-white">#{rank}</span>
+                            <p className="text-[9px] text-white/50 uppercase tracking-widest mt-1">Rank</p>
+                          </div>
+                          <div className="liquid-glass p-4 rounded-xl border border-white/5 text-center">
+                            <span className="text-2xl font-bold text-white">{stats.totalPredictions}</span>
+                            <p className="text-[9px] text-white/50 uppercase tracking-widest mt-1">Predictions</p>
+                          </div>
+                          <div className="liquid-glass p-4 rounded-xl border border-white/5 text-center">
+                            <span className="text-2xl font-bold text-white">{stats.overallAccuracy}%</span>
+                            <p className="text-[9px] text-white/50 uppercase tracking-widest mt-1">Accuracy</p>
+                          </div>
+                        </div>
+
+                        <div className="liquid-glass p-6 rounded-xl border border-white/5 text-center">
+                          <h3 className="text-sm font-semibold text-white/80 mb-4 uppercase tracking-wider">Prediction Accuracy</h3>
+                          <div className="flex items-center justify-center gap-8">
+                            <svg width="120" height="120" viewBox="0 0 120 120" className="-rotate-90">
+                              <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="10" />
+                              <circle cx="60" cy="60" r="52" fill="none" stroke={stats.accuracy > 50 ? "#22c55e" : "#eab308"} strokeWidth="10"
+                                strokeDasharray={`${(stats.accuracy / 100) * 327} 327`}
+                                strokeLinecap="round" />
+                              <circle cx="60" cy="60" r="38" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="8" />
+                              <circle cx="60" cy="60" r="38" fill="none" stroke={stats.scorelineAccuracy > 50 ? "#3b82f6" : "#a855f7"} strokeWidth="8"
+                                strokeDasharray={`${(stats.scorelineAccuracy / 100) * 239} 239`}
+                                strokeLinecap="round" />
+                            </svg>
+                            <div className="text-left">
+                              <div className="flex items-center gap-3 mb-2">
+                                <span className="w-3 h-3 rounded-full bg-green-500" />
+                                <span className="text-xs text-white/70">Winner Correct: {stats.correctWinners}</span>
+                              </div>
+                              <div className="flex items-center gap-3 mb-2">
+                                <span className="w-3 h-3 rounded-full bg-white/20" />
+                                <span className="text-xs text-white/70">Winner Incorrect: {stats.scoredPredictions - stats.correctWinners}</span>
+                              </div>
+                              <div className="flex items-center gap-3 mb-2">
+                                <span className="w-3 h-3 rounded-full bg-blue-500" />
+                                <span className="text-xs text-white/70">Scoreline Correct: {stats.correctScorelines}</span>
+                              </div>
+                              <div className="flex items-center gap-3 mb-2">
+                                <span className="w-3 h-3 rounded-full bg-white/20" />
+                                <span className="text-xs text-white/70">Scoreline Incorrect: {stats.totalScorelinePreds - stats.correctScorelines}</span>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <span className="w-3 h-3 rounded-full bg-white/10" />
+                                <span className="text-xs text-white/70">Unscored: {stats.totalPredictions - stats.scoredPredictions}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {currentUser.favoriteTeam && (
+                          <div className="liquid-glass p-5 rounded-xl border border-white/5 text-center">
+                            <p className="text-[9px] text-white/50 uppercase tracking-widest mb-2">Your Supported Team</p>
+                            <div className="flex items-center justify-center gap-3">
+                              <img src={teamJerseyPath(currentUser.favoriteTeam)} alt={currentUser.favoriteTeam} className="w-12 h-16 sm:w-16 sm:h-20 object-contain" onError={(e) => { e.target.style.display = "none"; }} />
+                              <div className="text-left">
+                                <span className="text-2xl block">{fl(currentUser.favoriteTeam)}</span>
+                                <span className="text-sm font-semibold text-white">{currentUser.favoriteTeam}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="text-left">
+                          <h3 className="font-heading italic text-xl uppercase tracking-tight text-white mb-4">Prediction History</h3>
+                        </div>
+                        {myPredsList.length === 0 ? (
+                          <div className="liquid-glass rounded-xl p-8 text-center border border-white/5">
+                            <span className="text-3xl block mb-2">🔮</span>
+                            <p className="text-xs text-white/50">No predictions yet</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {myPredsList.map(pred => {
+                              const fix = allFixtures.find(f => String(f.id) === String(pred.fixtureId));
+                              const res = results[pred.fixtureId];
+                              const pts = fix && res ? calcPoints(pred, res, fix) : null;
+                              const isGold = fix && currentUser?.favoriteTeam && (fix.home === currentUser.favoriteTeam || fix.away === currentUser.favoriteTeam);
+                              return (
+                                <div key={pred.id || `${pred.uid}_${pred.fixtureId}`} className={`liquid-glass p-4 rounded-xl border ${isGold ? "card-gold" : "border-white/5"}`}>
+                                  <div className="flex justify-between items-start">
+                                    <div>
+                                      <p className="text-xs font-semibold text-white">
+                                        {fix ? `${fl(fix.home)} ${fix.home} vs ${fix.away} ${fl(fix.away)}` : `Match #${pred.fixtureId}`}
+                                      </p>
+                                      <p className="text-[10px] text-white/40 mt-1">
+                                        {fix ? formatDate(fix.date) : ""}
+                                        {pred.submittedAt && ` • Predicted: ${new Date(pred.submittedAt?.toMillis ? pred.submittedAt.toMillis() : pred.submittedAt).toLocaleString("en-IN")}`}
+                                      </p>
+                                    </div>
+                                    <div className="text-right">
+                                      <p className="text-[10px] text-white/70 font-semibold">{formatPredictionSummary(pred, fix)}</p>
+                                      {pts !== null && <p className={`text-[10px] font-bold mt-1 ${pts > 0 ? "text-green-400" : "text-white/40"}`}>{pts > 0 ? `+${pts} PTS` : "0 PTS"}</p>}
+                                      {res && <p className="text-[9px] text-white/40 mt-0.5">Result: {formatResultSummary(res, fix)}</p>}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {/* ═══════════════════════════════════════════════════════════════════
+              ADMIN DASHBOARD
+          ═══════════════════════════════════════════════════════════════════ */}
+                  {page === "admin" && isAdmin && (
+                    <div>
+                      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+                        <h2 className="font-heading italic text-2xl uppercase tracking-tight text-white">Console</h2>
+                        <div className="flex items-center gap-3">
+                          <button className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 ${isLockedGlobal ? "bg-green-950 text-green-400 border border-green-800" : "bg-amber-950 text-amber-400 border border-amber-800"}`}
+                            onClick={() => updateArenaSettings({ arenaLocked: !isLockedGlobal })}>
+                            {isLockedGlobal ? <Unlock className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
+                            {isLockedGlobal ? "Unlock Arena" : "Lock Arena"}
+                          </button>
+                          <button className="btn-secondary px-4 py-1.5 rounded-full text-[10px] font-semibold" onClick={() => openAddMatch()}>+ Add Match</button>
+                          {undoInfo && (
+                            <button className="btn-secondary px-3 py-1.5 rounded-full text-[10px] font-semibold border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10" onClick={handleUndoFixtureEdit}>
+                              ↩ Undo Edit
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex gap-1 p-1 rounded-xl bg-white/5 border border-white/5 mb-6 overflow-x-auto no-scrollbar">
+                        {["results", "matches", "custommatch", "winners", "upcoming", "finished", "stream", "leaderboard", "participants"].map((tab) => (
+                          <button key={tab}
+                            className={`px-3 py-1.5 rounded-lg text-[9px] font-semibold uppercase tracking-wider whitespace-nowrap transition-colors ${adminTab === tab ? "bg-white text-black" : "text-white/60 hover:text-white border border-white/10"}`}
+                            onClick={() => setAdminTab(tab)}>{tab === "custommatch" ? "Custom Match" : tab === "winners" ? "Winners" : tab}</button>
+                        ))}
+                      </div>
+
+                      {/* ADMIN: Results */}
+                      {adminTab === "results" && (
+                        <div className="space-y-4">
+                          <div className="flex gap-1.5 overflow-x-auto pb-2 no-scrollbar">
+                            {groups.map(g => (
+                              <button key={g}
+                                className={`px-4 py-1.5 text-xs font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${adminGroup === g ? "bg-white text-black" : "bg-white/5 text-white/60 hover:text-white"}`}
+                                onClick={() => setAdminGroup(g)}>Group {g}</button>
+                            ))}
+                          </div>
+                          {mergeFixtures(FIXTURES, fixtureOverrides || {}).filter(f => f.group === adminGroup).map(fix => {
+                            const res = results[fix.id];
+                            const isGold = currentUser?.favoriteTeam && (fix.home === currentUser.favoriteTeam || fix.away === currentUser.favoriteTeam);
+                            return (
+                              <div key={fix.id} className={`liquid-glass p-4 rounded-xl border ${isGold ? "card-gold" : "border-white/5"} flex items-center justify-between text-left`}>
+                                <div>
+                                  <h4 className="text-sm font-semibold text-white">{fl(fix.home)} {fix.home} vs {fix.away} {fl(fix.away)}</h4>
+                                  <p className="text-[10px] text-white/40 mt-1">{formatDate(fix.date)}</p>
+                                  {res && <div className="frozen-inner rounded-lg px-3 py-2 text-xs font-semibold text-white/80 mt-2 inline-block">Result: {formatResultSummary(res, fix)}</div>}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <button className="btn-secondary p-2 rounded-lg text-[10px] font-semibold" title="Edit fixture" onClick={() => openEditFixture(fix)}>✏️</button>
+                                  <button className="btn-secondary px-3 py-1.5 rounded-lg text-xs font-semibold" onClick={() => { setSelFixture(fix); setResHomeGoals(res?.homeGoals !== undefined ? String(res.homeGoals) : ""); setResAwayGoals(res?.awayGoals !== undefined ? String(res.awayGoals) : ""); }}>
+                                    {res ? "Edit" : "Result"}
+                                  </button>
                                 </div>
                               </div>
                             );
                           })}
                         </div>
                       )}
-                    </div>
-                  );
-                })()}
-              </div>
-            )}
 
-            <footer className="mt-auto text-center shrink-0">
-              {!isAdmin && userTab === "you" ? (
-                <>
-                  <p className="text-[10px] text-white/20 tracking-wide mb-2">say hi to me</p>
-                  <div className="flex items-center justify-center gap-4">
-                    <a href={CREATOR_LINKS.instagram} target="_blank" rel="noopener noreferrer" className="text-white/20 hover:text-white/70 transition-colors" aria-label="Instagram">
-                      <IconInstagram className="h-3.5 w-3.5" />
-                    </a>
-                    <a href={CREATOR_LINKS.linkedin} target="_blank" rel="noopener noreferrer" className="text-white/20 hover:text-white/70 transition-colors" aria-label="LinkedIn">
-                      <IconLinkedIn className="h-3.5 w-3.5" />
-                    </a>
-                    <a href={CREATOR_LINKS.github} target="_blank" rel="noopener noreferrer" className="text-white/20 hover:text-white/70 transition-colors" aria-label="GitHub">
-                      <IconGitHub className="h-3.5 w-3.5" />
-                    </a>
-                    <a href={CREATOR_LINKS.email} className="text-white/20 hover:text-white/70 transition-colors" aria-label="Email">
-                      <Mail className="h-3.5 w-3.5" strokeWidth={1.5} />
-                    </a>
-                  </div>
-                </>
-              ) : (
-                <div className="pb-8 flex items-center justify-center gap-6 pt-8">
-                  {SPONSORS.map(sp => (
-                    <img key={sp.label} src={sp.logo} alt={sp.name} className="h-8 sm:h-10 object-contain opacity-30 hover:opacity-60 transition-opacity rounded-2xl" />
+                      {/* ADMIN: Matches (admin-created) */}
+                      {adminTab === "matches" && (
+                        <div className="space-y-3">
+                          {knockoutFixtures.length === 0 ? (
+                            <p className="text-xs text-white/40 py-8 text-center">No knockout stage fixtures configured yet.</p>
+                          ) : (
+                            knockoutFixtures.map(fix => {
+                              const res = results[fix.id];
+                              const isGold = currentUser?.favoriteTeam && (fix.home === currentUser.favoriteTeam || fix.away === currentUser.favoriteTeam);
+                              return (
+                                <div key={fix.id} className={`liquid-glass p-4 rounded-xl border ${isGold ? "card-gold" : "border-white/5"} flex flex-col text-left`}>
+                                  <div className="flex justify-between items-start">
+                                    <div>
+                                      <span className="bg-white/10 border border-white/10 px-2.5 py-0.5 rounded text-[10px] text-white font-bold uppercase tracking-wider">{fix.round || "Custom"}</span>
+                                      <h4 className="text-sm font-semibold text-white mt-3">{fl(fix.home)} {fix.home} vs {fix.away} {fl(fix.away)}</h4>
+                                      <p className="text-[10px] text-white/45 mt-1">{formatDate(fix.date)} &nbsp;•&nbsp; {fix.venue}</p>
+                                      {res && <p className="frozen-inner rounded-lg px-3 py-2 text-xs font-bold text-white/80 mt-2 inline-block">Result: {formatResultSummary(res, fix)}</p>}
+                                    </div>
+                                    <div className="flex gap-2">
+                                      <button className="btn-secondary px-3 py-1 rounded text-[10px] font-semibold" onClick={() => openAddMatch(fix)}>Edit</button>
+                                      <button className="btn-secondary px-3 py-1 rounded text-[10px] font-semibold border-red-500/30 text-red-400 hover:bg-red-500/10" onClick={() => handleDeleteMatch(fix.id)}>Delete</button>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      )}
+
+                      {/* ADMIN: Custom Match (same as add match, dedicated tab) */}
+                      {adminTab === "custommatch" && (
+                        <div className="liquid-glass p-6 rounded-xl border border-white/10">
+                          <h3 className="font-heading italic text-xl text-white uppercase tracking-tight mb-6">Create Custom Match</h3>
+                          <div className="mb-5">
+                            <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-2">Round / Label</label>
+                            <div className="flex gap-1.5 flex-wrap">
+                              {ROUNDS.concat(["Custom"]).map(r => (
+                                <button key={r} className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase border transition-all ${newRound === r ? "bg-white text-black border-white" : "bg-white/5 border-white/10 text-white/60 hover:text-white"}`} onClick={() => setNewRound(r)}>{r}</button>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end mb-5">
+                            <div>
+                              <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Home Team</label>
+                              <input className="input-glass w-full px-3 py-2.5 rounded-lg text-xs" placeholder="e.g. Argentina" value={newHome} onChange={e => setNewHome(e.target.value)} />
+                            </div>
+                            <span className="text-center text-[10px] font-bold text-white/20 pb-2 hidden sm:block">VS</span>
+                            <div>
+                              <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Away Team</label>
+                              <input className="input-glass w-full px-3 py-2.5 rounded-lg text-xs" placeholder="e.g. France" value={newAway} onChange={e => setNewAway(e.target.value)} />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4 mb-5">
+                            <div>
+                              <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Date</label>
+                              <input className="input-glass w-full px-3 py-2.5 rounded-lg text-xs" type="date" value={newDate} onChange={e => setNewDate(e.target.value)} />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Time</label>
+                              <input className="input-glass w-full px-3 py-2.5 rounded-lg text-xs" type="time" value={newTime} onChange={e => setNewTime(e.target.value)} />
+                            </div>
+                          </div>
+                          <div className="mb-6">
+                            <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Venue</label>
+                            <input className="input-glass w-full px-3 py-2.5 rounded-lg text-xs" placeholder="e.g. MetLife Stadium" value={newVenue} onChange={e => setNewVenue(e.target.value)} />
+                          </div>
+                          <button className="btn-primary px-8 py-3 rounded-full text-xs font-bold uppercase tracking-wider" onClick={handleSaveMatch}>Create Custom Match</button>
+                        </div>
+                      )}
+
+                      {/* ADMIN: Winners entry (quick result entry) */}
+                      {adminTab === "winners" && (
+                        <div className="space-y-4">
+                          <p className="text-[11px] text-white/50 uppercase tracking-wider mb-4">Enter results for any match</p>
+                          {allFixtures.filter(f => new Date(f.date) < new Date()).sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 20).map(fix => {
+                            const res = results[fix.id];
+                            const isGold = currentUser?.favoriteTeam && (fix.home === currentUser.favoriteTeam || fix.away === currentUser.favoriteTeam);
+                            return (
+                              <div key={fix.id} className={`liquid-glass p-4 rounded-xl border ${isGold ? "card-gold" : "border-white/5"} flex items-center justify-between text-left`}>
+                                <div>
+                                  <h4 className="text-sm font-semibold text-white">{fl(fix.home)} {fix.home} vs {fix.away} {fl(fix.away)}</h4>
+                                  <p className="text-[10px] text-white/40 mt-1">{formatDate(fix.date)}</p>
+                                  {res && <div className="frozen-inner rounded-lg px-3 py-2 text-xs font-semibold text-white/80 mt-2 inline-block">Result: {formatResultSummary(res, fix)}</div>}
+                                </div>
+                                <button className="btn-secondary px-4 py-1.5 rounded-lg text-xs font-semibold" onClick={() => { setSelFixture(fix); setResHomeGoals(res?.homeGoals !== undefined ? String(res.homeGoals) : ""); setResAwayGoals(res?.awayGoals !== undefined ? String(res.awayGoals) : ""); }}>
+                                  {res ? "Edit" : "Enter"}
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* ADMIN: All Fixtures */}
+                      {adminTab === "upcoming" && (
+                        <div className="space-y-3">
+                          {upcomingFiltered.length === 0 ? (
+                            <p className="text-xs text-white/40 py-8 text-center">No matches.</p>
+                          ) : (
+                            upcomingFiltered.map(fix => {
+                              const status = getStatus(fix, isLockedGlobal);
+                              const res = results[fix.id];
+                              const isGold = currentUser?.favoriteTeam && (fix.home === currentUser.favoriteTeam || fix.away === currentUser.favoriteTeam);
+                              return (
+                                <div key={fix.id} className={`liquid-glass p-4 rounded-xl border ${isGold ? "card-gold" : "border-white/5"} flex items-center justify-between`}>
+                                  <div>
+                                    <span className="text-[10px] text-white/50">{fix.isKnockout ? fix.round : `Group ${fix.group}`}</span>
+                                    <h4 className="text-sm font-semibold text-white mt-1">{fl(fix.home)} {fix.home} vs {fix.away} {fl(fix.away)}</h4>
+                                    <p className="text-[10px] text-white/40 mt-1">{formatDate(fix.date)}</p>
+                                  </div>
+                                  <div className="text-right">
+                                    {status === "played" && res ? (
+                                      <div>
+                                        <p className="text-xs font-bold text-white/90">{res.homeGoals ?? "?"}–{res.awayGoals ?? "?"}</p>
+                                        <p className="text-[8px] text-white/40 uppercase tracking-wider mt-0.5">FT</p>
+                                      </div>
+                                    ) : (
+                                      <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full ${status === "open" ? "bg-green-950 text-green-400" : "bg-amber-950/80 text-amber-400"}`}>{status}</span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      )}
+
+                      {/* ADMIN: Finished */}
+                      {adminTab === "finished" && (
+                        <div className="space-y-3">
+                          {finishedFixtures.filter(f => results[f.id]).length === 0 ? (
+                            <p className="text-xs text-white/40 py-8 text-center">No finished matches.</p>
+                          ) : (
+                            [...finishedFixtures].reverse().map(fix => {
+                              const res = results[fix.id];
+                              const isGold = currentUser?.favoriteTeam && (fix.home === currentUser.favoriteTeam || fix.away === currentUser.favoriteTeam);
+                              return (
+                                <div key={fix.id} className={`liquid-glass p-4 rounded-xl border ${isGold ? "card-gold" : "border-white/5"} flex items-center justify-between`}>
+                                  <div>
+                                    <span className="text-[10px] text-white/50">{fix.isKnockout ? fix.round : `Group ${fix.group}`}</span>
+                                    <h4 className="text-sm font-semibold text-white mt-1">{fl(fix.home)} {fix.home} vs {fix.away} {fl(fix.away)}</h4>
+                                    <p className="text-[10px] text-white/40 mt-1">{formatDate(fix.date)}</p>
+                                  </div>
+                                  <div className="text-right">
+                                    {res ? (
+                                      <div>
+                                        <p className="text-xs font-bold text-white/90">{res.homeGoals ?? "?"}–{res.awayGoals ?? "?"}</p>
+                                        <p className="text-[8px] text-white/40 uppercase tracking-wider mt-0.5">FT</p>
+                                      </div>
+                                    ) : (
+                                      <span className="text-[9px] text-white/40">No result</span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      )}
+
+                      {adminTab === "stream" && (
+                        <div className="space-y-4">
+                          <div className="text-left">
+                            <h3 className="font-heading italic text-xl uppercase tracking-tight text-white mb-2">Stream Poll</h3>
+                            <p className="text-xs text-white/50">Would you like live streaming of matches here?</p>
+                          </div>
+                          {(() => {
+                            const yesCount = Object.values(streamResponses).filter(r => r.response === "yes").length;
+                            const noCount = Object.values(streamResponses).filter(r => r.response === "no").length;
+                            const total = yesCount + noCount;
+                            return (
+                              <div className="grid grid-cols-3 gap-3">
+                                <div className="liquid-glass p-4 rounded-xl border border-white/5 text-center">
+                                  <p className="text-2xl font-bold text-white">{total}</p>
+                                  <p className="text-[9px] text-white/50 uppercase tracking-widest mt-1">Total Votes</p>
+                                </div>
+                                <div className="liquid-glass p-4 rounded-xl border border-white/5 text-center">
+                                  <p className="text-2xl font-bold text-green-400">{yesCount}</p>
+                                  <p className="text-[9px] text-white/50 uppercase tracking-widest mt-1">Yes</p>
+                                </div>
+                                <div className="liquid-glass p-4 rounded-xl border border-white/5 text-center">
+                                  <p className="text-2xl font-bold text-red-400">{noCount}</p>
+                                  <p className="text-[9px] text-white/50 uppercase tracking-widest mt-1">No</p>
+                                </div>
+                              </div>
+                            );
+                          })()}
+                          {Object.values(streamResponses).filter(r => r.response === "yes" || r.response === "no").length > 0 && (
+                            <div className="w-full bg-white/10 rounded-full h-4 overflow-hidden flex">
+                              <div className="bg-green-500 h-full transition-all" style={{ width: `${(Object.values(streamResponses).filter(r => r.response === "yes").length / Math.max(Object.values(streamResponses).filter(r => r.response === "yes" || r.response === "no").length, 1)) * 100}%` }} />
+                              <div className="bg-red-500 h-full transition-all" style={{ width: `${(Object.values(streamResponses).filter(r => r.response === "no").length / Math.max(Object.values(streamResponses).filter(r => r.response === "yes" || r.response === "no").length, 1)) * 100}%` }} />
+                            </div>
+                          )}
+                          <button className="btn-secondary px-4 py-2 rounded-lg text-xs font-semibold border-red-500/30 text-red-400 hover:bg-red-500/10" onClick={async () => { await clearStreamPoll(); setStreamResponses({}); }}>
+                            Clear All Responses
+                          </button>
+                        </div>
+                      )}
+
+                      {/* ADMIN: Leaderboard */}
+                      {adminTab === "leaderboard" && (
+                        <div className="space-y-2">
+                          {leaderboard.map((u) => (
+                            <div key={u.id} className="liquid-glass p-3.5 rounded-xl border border-white/5 flex justify-between items-center text-left">
+                              <div>
+                                <h4 className="text-sm font-semibold text-white">{u.name}</h4>
+                                <p className="text-[10px] text-white/40 uppercase tracking-widest mt-0.5">{u.dept} • {u.year || "1st Year"}</p>
+                              </div>
+                              <span className="font-heading italic text-lg text-white font-bold">{u.points} PTS</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* ADMIN: Participants (clickable for history) */}
+                      {adminTab === "participants" && !viewingParticipant && (
+                        <div className="space-y-2">
+                          {Object.values(users).map(u => {
+                            const count = allFixtures.filter(f => predictions[`${u.id}_${f.id}`]).length;
+                            return (
+                              <div key={u.id} className="liquid-glass p-4 rounded-xl border border-white/5 flex items-center justify-between text-left cursor-pointer hover:border-white/20 transition-colors"
+                                onClick={() => setViewingParticipant(u)}>
+                                <div>
+                                  <h4 className="text-sm font-semibold text-white">{u.name}</h4>
+                                  <span className="text-[10px] text-white/40 uppercase tracking-widest block mt-0.5">{u.dept} • {u.year || "1st Year"}</span>
+                                </div>
+                                <div className="text-right flex items-center gap-3">
+                                  <span className="text-xs font-semibold text-white block">{count} / {allFixtures.length}</span>
+                                  <Eye className="h-3.5 w-3.5 text-white/40" />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {adminTab === "participants" && viewingParticipant && (() => {
+                        const u = viewingParticipant;
+                        const stats = getUserStats(u.id, predictions, results, allFixtures);
+                        const pLeader = leaderboard.filter(u2 => !u2.isAdmin).find(l => l.id === u.id);
+                        const pPoints = pLeader?.points || 0;
+                        const rank = leaderboard.filter(u2 => !u2.isAdmin).findIndex(l => l.id === u.id) + 1;
+                        const pPredsList = Object.values(predictions).filter(p => p.uid === u.id)
+                          .sort((a, b) => {
+                            const fixA = allFixtures.find(f => String(f.id) === String(a.fixtureId));
+                            const fixB = allFixtures.find(f => String(f.id) === String(b.fixtureId));
+                            return (fixB ? new Date(fixB.date) : 0) - (fixA ? new Date(fixA.date) : 0);
+                          });
+                        return (
+                          <div className="space-y-6">
+                            <button className="flex items-center gap-1.5 text-[10px] text-white/50 uppercase tracking-widest hover:text-white transition-colors"
+                              onClick={() => setViewingParticipant(null)}>
+                              <ArrowLeft className="h-3 w-3" /> Participants
+                            </button>
+
+                            <div className="text-left">
+                              <h2 className="font-heading italic text-2xl uppercase tracking-tight text-white">{u.name}</h2>
+                              <p className="text-[10px] text-white/40 uppercase tracking-widest mt-1">{u.dept} • {u.year || "1st Year"}</p>
+                            </div>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                              <div className="liquid-glass p-4 rounded-xl border border-white/5 text-center">
+                                <span className="text-2xl font-bold text-white">{pPoints}</span>
+                                <p className="text-[9px] text-white/50 uppercase tracking-widest mt-1">Points</p>
+                              </div>
+                              <div className="liquid-glass p-4 rounded-xl border border-white/5 text-center">
+                                <span className="text-2xl font-bold text-white">#{rank}</span>
+                                <p className="text-[9px] text-white/50 uppercase tracking-widest mt-1">Rank</p>
+                              </div>
+                              <div className="liquid-glass p-4 rounded-xl border border-white/5 text-center">
+                                <span className="text-2xl font-bold text-white">{stats.totalPredictions}</span>
+                                <p className="text-[9px] text-white/50 uppercase tracking-widest mt-1">Predictions</p>
+                              </div>
+                              <div className="liquid-glass p-4 rounded-xl border border-white/5 text-center">
+                                <span className="text-2xl font-bold text-white">{stats.overallAccuracy}%</span>
+                                <p className="text-[9px] text-white/50 uppercase tracking-widest mt-1">Accuracy</p>
+                              </div>
+                            </div>
+
+                            <div className="liquid-glass p-6 rounded-xl border border-white/5 text-center">
+                              <h3 className="text-sm font-semibold text-white/80 mb-4 uppercase tracking-wider">Prediction Accuracy</h3>
+                              <div className="flex items-center justify-center gap-8">
+                                <svg width="120" height="120" viewBox="0 0 120 120" className="-rotate-90">
+                                  <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="10" />
+                                  <circle cx="60" cy="60" r="52" fill="none" stroke={stats.accuracy > 50 ? "#22c55e" : "#eab308"} strokeWidth="10"
+                                    strokeDasharray={`${(stats.accuracy / 100) * 327} 327`}
+                                    strokeLinecap="round" />
+                                  <circle cx="60" cy="60" r="38" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="8" />
+                                  <circle cx="60" cy="60" r="38" fill="none" stroke={stats.scorelineAccuracy > 50 ? "#3b82f6" : "#a855f7"} strokeWidth="8"
+                                    strokeDasharray={`${(stats.scorelineAccuracy / 100) * 239} 239`}
+                                    strokeLinecap="round" />
+                                </svg>
+                                <div className="text-left">
+                                  <div className="flex items-center gap-3 mb-2">
+                                    <span className="w-3 h-3 rounded-full bg-green-500" />
+                                    <span className="text-xs text-white/70">Winner Correct: {stats.correctWinners}</span>
+                                  </div>
+                                  <div className="flex items-center gap-3 mb-2">
+                                    <span className="w-3 h-3 rounded-full bg-white/20" />
+                                    <span className="text-xs text-white/70">Winner Incorrect: {stats.scoredPredictions - stats.correctWinners}</span>
+                                  </div>
+                                  <div className="flex items-center gap-3 mb-2">
+                                    <span className="w-3 h-3 rounded-full bg-blue-500" />
+                                    <span className="text-xs text-white/70">Scoreline Correct: {stats.correctScorelines}</span>
+                                  </div>
+                                  <div className="flex items-center gap-3 mb-2">
+                                    <span className="w-3 h-3 rounded-full bg-white/20" />
+                                    <span className="text-xs text-white/70">Scoreline Incorrect: {stats.totalScorelinePreds - stats.correctScorelines}</span>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <span className="w-3 h-3 rounded-full bg-white/10" />
+                                    <span className="text-xs text-white/70">Unscored: {stats.totalPredictions - stats.scoredPredictions}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="text-left">
+                              <h3 className="font-heading italic text-xl uppercase tracking-tight text-white mb-4">Prediction History</h3>
+                            </div>
+                            {pPredsList.length === 0 ? (
+                              <div className="liquid-glass rounded-xl p-8 text-center border border-white/5">
+                                <span className="text-3xl block mb-2">🔮</span>
+                                <p className="text-xs text-white/50">No predictions yet</p>
+                              </div>
+                            ) : (
+                              <div className="space-y-2">
+                                {pPredsList.map(pred => {
+                                  const fix = allFixtures.find(f => String(f.id) === String(pred.fixtureId));
+                                  const res = results[pred.fixtureId];
+                                  const pts = fix && res ? calcPoints(pred, res, fix) : null;
+                                  const isGold = fix && currentUser?.favoriteTeam && (fix.home === currentUser.favoriteTeam || fix.away === currentUser.favoriteTeam);
+                                  return (
+                                    <div key={pred.id || `${pred.uid}_${pred.fixtureId}`} className={`liquid-glass p-4 rounded-xl border ${isGold ? "card-gold" : "border-white/5"}`}>
+                                      <div className="flex justify-between items-start">
+                                        <div>
+                                          <p className="text-xs font-semibold text-white">
+                                            {fix ? `${fl(fix.home)} ${fix.home} vs ${fix.away} ${fl(fix.away)}` : `Match #${pred.fixtureId}`}
+                                          </p>
+                                          <p className="text-[10px] text-white/40 mt-1">
+                                            {fix ? formatDate(fix.date) : ""}
+                                            {pred.submittedAt && ` • Predicted: ${new Date(pred.submittedAt?.toMillis ? pred.submittedAt.toMillis() : pred.submittedAt).toLocaleString("en-IN")}`}
+                                          </p>
+                                        </div>
+                                        <div className="text-right">
+                                          <p className="text-[10px] text-white/70 font-semibold">{formatPredictionSummary(pred, fix)}</p>
+                                          {pts !== null && <p className={`text-[10px] font-bold mt-1 ${pts > 0 ? "text-green-400" : "text-white/40"}`}>{pts > 0 ? `+${pts} PTS` : "0 PTS"}</p>}
+                                          {res && <p className="text-[9px] text-white/40 mt-0.5">Result: {formatResultSummary(res, fix)}</p>}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  <footer className="pb-16 mt-auto text-center shrink-0">
+                    {!isAdmin && userTab === "you" ? (
+                      <>
+                        <p className="text-[10px] text-white/20 tracking-wide mb-2">say hi to me</p>
+                        <div className="flex items-center justify-center gap-4">
+                          <a href={CREATOR_LINKS.instagram} target="_blank" rel="noopener noreferrer" className="text-white/20 hover:text-white/70 transition-colors" aria-label="Instagram">
+                            <IconInstagram className="h-3.5 w-3.5" />
+                          </a>
+                          <a href={CREATOR_LINKS.linkedin} target="_blank" rel="noopener noreferrer" className="text-white/20 hover:text-white/70 transition-colors" aria-label="LinkedIn">
+                            <IconLinkedIn className="h-3.5 w-3.5" />
+                          </a>
+                          <a href={CREATOR_LINKS.github} target="_blank" rel="noopener noreferrer" className="text-white/20 hover:text-white/70 transition-colors" aria-label="GitHub">
+                            <IconGitHub className="h-3.5 w-3.5" />
+                          </a>
+                          <a href={CREATOR_LINKS.email} className="text-white/20 hover:text-white/70 transition-colors" aria-label="Email">
+                            <Mail className="h-3.5 w-3.5" strokeWidth={1.5} />
+                          </a>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex items-center justify-center gap-6 pt-8">
+                        {SPONSORS.map(sp => (
+                          <img key={sp.label} src={sp.logo} alt={sp.name} className="h-8 sm:h-10 object-contain opacity-30 hover:opacity-60 transition-opacity rounded-2xl" />
+                        ))}
+                      </div>
+                    )}
+                  </footer>
+                </motion.div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {predFixture && (
+          <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={e => e.target === e.currentTarget && setPredFixture(null)}>
+            <div className="liquid-glass p-6 w-full max-w-sm rounded-[1.25rem] border border-white/10 shadow-2xl relative text-left">
+              <h3 className="font-heading italic text-2xl text-white tracking-tight uppercase">Lock Prediction</h3>
+              <p className="text-[10px] text-white/50 uppercase tracking-widest mt-1 mb-6">{formatDate(predFixture.date)} • {predFixture.venue}</p>
+              <div className="frozen-inner rounded-xl p-4 flex items-center justify-around mb-6">
+                <div className="text-center">
+                  <span className="text-4xl block">{fl(predFixture.home)}</span>
+                  <span className="text-xs font-semibold text-white/80 mt-1 block">{predFixture.home}</span>
+                </div>
+                <span className="text-xs font-bold text-white/20">VS</span>
+                <div className="text-center">
+                  <span className="text-4xl block">{fl(predFixture.away)}</span>
+                  <span className="text-xs font-semibold text-white/80 mt-1 block">{predFixture.away}</span>
+                </div>
+              </div>
+
+              <div className="mb-5">
+                <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-2">Predict winner (or we'll use the scoreline)</label>
+                <div className="flex gap-2">
+                  {[predFixture.home, "Draw", predFixture.away].map(opt => (
+                    <button key={opt}
+                      className={`flex-1 py-3.5 rounded-xl text-[10px] font-bold uppercase tracking-wider border transition-all ${predWinner === opt ? "bg-white text-black border-white" : "frozen-inner text-white/60 hover:text-white"}`}
+                      onClick={() => setPredWinner(opt)}>
+                      <div className="text-lg mb-1 leading-none">{fl(opt)}</div>
+                      {opt}
+                    </button>
                   ))}
                 </div>
-              )}
-            </footer>
-          </div>
-        </div>
-      )}
-
-      {predFixture && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={e => e.target === e.currentTarget && setPredFixture(null)}>
-          <div className="liquid-glass p-6 w-full max-w-sm rounded-[1.25rem] border border-white/10 shadow-2xl relative text-left">
-            <h3 className="font-heading italic text-2xl text-white tracking-tight uppercase">Lock Prediction</h3>
-            <p className="text-[10px] text-white/50 uppercase tracking-widest mt-1 mb-6">{formatDate(predFixture.date)} • {predFixture.venue}</p>
-            <div className="frozen-inner rounded-xl p-4 flex items-center justify-around mb-6">
-              <div className="text-center">
-                <span className="text-4xl block">{fl(predFixture.home)}</span>
-                <span className="text-xs font-semibold text-white/80 mt-1 block">{predFixture.home}</span>
               </div>
-              <span className="text-xs font-bold text-white/20">VS</span>
-              <div className="text-center">
-                <span className="text-4xl block">{fl(predFixture.away)}</span>
-                <span className="text-xs font-semibold text-white/80 mt-1 block">{predFixture.away}</span>
+
+              <div className="mb-6">
+                <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-2">Exact scoreline (required)</label>
+                <div className="frozen-inner rounded-xl p-4 flex items-center gap-3">
+                  <div className="flex-1 text-center">
+                    <p className="text-[9px] text-white/45 uppercase tracking-wider mb-2 truncate">{predFixture.home}</p>
+                    <input className="input-glass w-full px-3 py-3 rounded-xl text-center text-lg font-semibold" type="number" min="0" placeholder="0" value={predHomeGoals} onChange={e => setPredHomeGoals(e.target.value)} />
+                  </div>
+                  <span className="text-sm font-bold text-white/25 pt-5">–</span>
+                  <div className="flex-1 text-center">
+                    <p className="text-[9px] text-white/45 uppercase tracking-wider mb-2 truncate">{predFixture.away}</p>
+                    <input className="input-glass w-full px-3 py-3 rounded-xl text-center text-lg font-semibold" type="number" min="0" placeholder="0" value={predAwayGoals} onChange={e => setPredAwayGoals(e.target.value)} />
+                  </div>
+                </div>
+                <p className="text-[10px] text-white/40 mt-1.5 leading-snug">Enter scores in home–away order. Example: 3–2 means {predFixture.home} 3, {predFixture.away} 2.</p>
+              </div>
+
+              <div className="frozen-inner rounded-xl p-3.5 text-[11px] text-white/50 leading-relaxed mb-6">
+                Enter the scoreline &mdash; we'll auto-detect the winner. Once submitted, your prediction is <strong className="text-white">locked and cannot be modified</strong>.
+              </div>
+
+              <div className="flex gap-3">
+                <button className="btn-primary flex-1 py-3 rounded-full text-xs uppercase tracking-widest font-bold" onClick={handleSavePrediction}>Lock Score</button>
+                <button className="btn-secondary px-6 py-3 rounded-full text-xs font-semibold" onClick={() => setPredFixture(null)}>Cancel</button>
               </div>
             </div>
+          </div>
+        )}
 
-            <div className="mb-5">
-              <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-2">Predict winner (or we'll use the scoreline)</label>
-              <div className="flex gap-2">
-                {[predFixture.home, "Draw", predFixture.away].map(opt => (
-                  <button key={opt}
-                    className={`flex-1 py-3.5 rounded-xl text-[10px] font-bold uppercase tracking-wider border transition-all ${predWinner === opt ? "bg-white text-black border-white" : "frozen-inner text-white/60 hover:text-white"}`}
-                    onClick={() => setPredWinner(opt)}>
-                    <div className="text-lg mb-1 leading-none">{fl(opt)}</div>
-                    {opt}
-                  </button>
+        {selFixture && isAdmin && (
+          <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={e => e.target === e.currentTarget && setSelFixture(null)}>
+            <div className="liquid-glass p-6 w-full max-w-sm rounded-[1.25rem] border border-white/15 shadow-2xl relative text-left">
+              <h3 className="font-heading italic text-2xl text-white tracking-tight uppercase mb-2 text-amber-500">Record Match Score</h3>
+              <p className="text-sm font-semibold text-white/90 mb-6">{fl(selFixture.home)} {selFixture.home} vs {selFixture.away} {fl(selFixture.away)}</p>
+              <div className="mb-6">
+                <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-2">Final scoreline</label>
+                <div className="frozen-inner rounded-xl p-4 flex items-center gap-3">
+                  <div className="flex-1 text-center">
+                    <p className="text-[9px] text-white/45 uppercase tracking-wider mb-2 truncate">{selFixture.home}</p>
+                    <input className="input-glass w-full px-3 py-3 rounded-xl text-center text-lg font-semibold" type="number" min="0" placeholder="0" value={resHomeGoals} onChange={e => setResHomeGoals(e.target.value)} />
+                  </div>
+                  <span className="text-sm font-bold text-white/25 pt-5">–</span>
+                  <div className="flex-1 text-center">
+                    <p className="text-[9px] text-white/45 uppercase tracking-wider mb-2 truncate">{selFixture.away}</p>
+                    <input className="input-glass w-full px-3 py-3 rounded-xl text-center text-lg font-semibold" type="number" min="0" placeholder="0" value={resAwayGoals} onChange={e => setResAwayGoals(e.target.value)} />
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button className="btn-primary flex-1 py-3 rounded-full text-xs uppercase tracking-widest font-bold" onClick={handleSaveResult}>Save Score</button>
+                <button className="btn-secondary px-6 py-3 rounded-full text-xs font-semibold" onClick={() => setSelFixture(null)}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showAddMatch && isAdmin && (
+          <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={e => e.target === e.currentTarget && setShowAddMatch(false)}>
+            <div className="liquid-glass p-6 w-full max-w-md rounded-[1.25rem] border border-white/15 shadow-2xl relative text-left">
+              <h3 className="font-heading italic text-2xl text-white tracking-tight uppercase mb-4 text-amber-500">
+                {editingMatch ? "Edit Knockout Match" : "Add Knockout Match"}
+              </h3>
+
+              <div className="mb-5">
+                <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-2">Knockout Round</label>
+                <div className="flex gap-1.5 flex-wrap">
+                  {ROUNDS.map(r => (
+                    <button key={r}
+                      className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase border transition-all ${newRound === r ? "bg-white text-black border-white" : "bg-white/5 border-white/10 text-white/60 hover:text-white"}`}
+                      onClick={() => setNewRound(r)}>{r}</button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center mb-5">
+                <div>
+                  <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Home Team</label>
+                  <input className="input-glass w-full px-3 py-2 rounded-lg text-xs" placeholder="e.g. Argentina" value={newHome} onChange={e => setNewHome(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 8, fontSize: 13 }} />
+                </div>
+                <span className="text-center text-[10px] font-bold text-white/20 mt-4 hidden md:inline">VS</span>
+                <div>
+                  <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Away Team</label>
+                  <input className="input-glass w-full px-3 py-2 rounded-lg text-xs" placeholder="e.g. France" value={newAway} onChange={e => setNewAway(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 8, fontSize: 13 }} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 mb-5">
+                <div>
+                  <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Match Date</label>
+                  <input className="input-glass w-full px-3 py-2 rounded-lg text-xs" type="date" value={newDate} onChange={e => setNewDate(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 8, fontSize: 13 }} />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Kick-off Time</label>
+                  <input className="input-glass w-full px-3 py-2 rounded-lg text-xs" type="time" value={newTime} onChange={e => setNewTime(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 8, fontSize: 13 }} />
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Venue</label>
+                <input className="input-glass w-full px-3 py-2 rounded-lg text-xs" placeholder="e.g. MetLife Stadium, New York" value={newVenue} onChange={e => setNewVenue(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 8, fontSize: 13 }} />
+              </div>
+
+              <div className="flex gap-3">
+                <button className="btn-primary flex-1 py-3 rounded-full text-xs uppercase tracking-widest font-bold" onClick={handleSaveMatch}>{editingMatch ? "Update Match" : "Create Match"}</button>
+                <button className="btn-secondary px-6 py-3 rounded-full text-xs font-semibold" onClick={() => setShowAddMatch(false)}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {editFixture && isAdmin && (
+          <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={e => e.target === e.currentTarget && setEditFixture(null)}>
+            <div className="liquid-glass p-6 w-full max-w-md rounded-[1.25rem] border border-white/15 shadow-2xl relative text-left">
+              <h3 className="font-heading italic text-2xl text-white tracking-tight uppercase mb-4 text-amber-500">
+                Edit Fixture
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center mb-5">
+                <div>
+                  <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Home Team</label>
+                  <input className="input-glass w-full px-3 py-2 rounded-lg text-xs" placeholder="Home" value={editFixtureHome} onChange={e => setEditFixtureHome(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 8, fontSize: 13 }} />
+                </div>
+                <span className="text-center text-[10px] font-bold text-white/20 mt-4 hidden md:inline">VS</span>
+                <div>
+                  <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Away Team</label>
+                  <input className="input-glass w-full px-3 py-2 rounded-lg text-xs" placeholder="Away" value={editFixtureAway} onChange={e => setEditFixtureAway(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 8, fontSize: 13 }} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4 mb-5">
+                <div>
+                  <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Match Date</label>
+                  <input className="input-glass w-full px-3 py-2 rounded-lg text-xs" type="date" value={editFixtureDate} onChange={e => setEditFixtureDate(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 8, fontSize: 13 }} />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Kick-off Time</label>
+                  <input className="input-glass w-full px-3 py-2 rounded-lg text-xs" type="time" value={editFixtureTime} onChange={e => setEditFixtureTime(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 8, fontSize: 13 }} />
+                </div>
+              </div>
+              <div className="mb-6">
+                <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Venue</label>
+                <input className="input-glass w-full px-3 py-2 rounded-lg text-xs" placeholder="e.g. MetLife Stadium" value={editFixtureVenue} onChange={e => setEditFixtureVenue(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 8, fontSize: 13 }} />
+              </div>
+              <div className="flex gap-3">
+                <button className="btn-primary flex-1 py-3 rounded-full text-xs uppercase tracking-widest font-bold" onClick={handleSaveFixtureEdit}>Save Changes</button>
+                <button className="btn-secondary px-6 py-3 rounded-full text-xs font-semibold" onClick={() => setEditFixture(null)}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showTeamPicker && (
+          <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4" onTouchStart={handlePickerTouchStart} onTouchEnd={handlePickerTouchEnd}>
+            <div className="w-full max-w-lg text-center">
+              <h2 className="font-heading italic text-3xl uppercase tracking-tight text-white mb-2">Choose Your Team</h2>
+              <p className="text-xs text-white/50 mb-8">Pick the team you'll be supporting this World Cup</p>
+              <div className="relative w-full" style={{ height: "min(48vh, 420px)" }}>
+                {TEAMS.map((t, i) => (
+                  <div key={t.name} className="absolute" style={getPickerRoleStyle(i, pickerTeamIndex)}>
+                    <img src={t.jersey} alt={t.name} className="w-full h-auto drop-shadow-2xl" onError={(e) => { e.target.src = JERSEY_PLACEHOLDER; }} />
+                  </div>
                 ))}
+                <button className="hidden sm:flex absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 backdrop-blur-sm border border-white/15 items-center justify-center text-white hover:bg-white/20 transition-all z-30" onClick={() => navigatePicker("prev")}>&#8249;</button>
+                <button className="hidden sm:flex absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 backdrop-blur-sm border border-white/15 items-center justify-center text-white hover:bg-white/20 transition-all z-30" onClick={() => navigatePicker("next")}>&#8250;</button>
               </div>
-            </div>
-
-            <div className="mb-6">
-              <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-2">Exact scoreline (required)</label>
-              <div className="frozen-inner rounded-xl p-4 flex items-center gap-3">
-                <div className="flex-1 text-center">
-                  <p className="text-[9px] text-white/45 uppercase tracking-wider mb-2 truncate">{predFixture.home}</p>
-                  <input className="input-glass w-full px-3 py-3 rounded-xl text-center text-lg font-semibold" type="number" min="0" placeholder="0" value={predHomeGoals} onChange={e => setPredHomeGoals(e.target.value)} />
-                </div>
-                <span className="text-sm font-bold text-white/25 pt-5">–</span>
-                <div className="flex-1 text-center">
-                  <p className="text-[9px] text-white/45 uppercase tracking-wider mb-2 truncate">{predFixture.away}</p>
-                  <input className="input-glass w-full px-3 py-3 rounded-xl text-center text-lg font-semibold" type="number" min="0" placeholder="0" value={predAwayGoals} onChange={e => setPredAwayGoals(e.target.value)} />
-                </div>
+              <div className="mt-4">
+                <span className="text-3xl">{fl(TEAMS[pickerTeamIndex]?.name)}</span>
+                <p className="text-sm font-semibold text-white mt-1">{TEAMS[pickerTeamIndex]?.name}</p>
+                <p className="text-[10px] text-white/40 uppercase tracking-wider mt-0.5">Group {TEAMS[pickerTeamIndex]?.group}</p>
               </div>
-              <p className="text-[10px] text-white/40 mt-1.5 leading-snug">Enter scores in home–away order. Example: 3–2 means {predFixture.home} 3, {predFixture.away} 2.</p>
-            </div>
-
-            <div className="frozen-inner rounded-xl p-3.5 text-[11px] text-white/50 leading-relaxed mb-6">
-              Enter the scoreline &mdash; we'll auto-detect the winner. Once submitted, your prediction is <strong className="text-white">locked and cannot be modified</strong>.
-            </div>
-
-            <div className="flex gap-3">
-              <button className="btn-primary flex-1 py-3 rounded-full text-xs uppercase tracking-widest font-bold" onClick={handleSavePrediction}>Lock Score</button>
-              <button className="btn-secondary px-6 py-3 rounded-full text-xs font-semibold" onClick={() => setPredFixture(null)}>Cancel</button>
+              <div className="flex gap-4 justify-center mt-8">
+                <button className="btn-primary px-10 py-3 rounded-full text-sm uppercase tracking-widest font-bold" onClick={() => handlePickTeam(TEAMS[pickerTeamIndex]?.name)}>
+                  Choose {TEAMS[pickerTeamIndex]?.name}
+                </button>
+              </div>
+              <p className="text-xs text-white/30 mt-4 cursor-pointer hover:text-white/60 transition-colors inline-block" onClick={() => handlePickTeam(null)}>
+                I'd rather not prefer
+              </p>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {selFixture && isAdmin && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={e => e.target === e.currentTarget && setSelFixture(null)}>
-          <div className="liquid-glass p-6 w-full max-w-sm rounded-[1.25rem] border border-white/15 shadow-2xl relative text-left">
-            <h3 className="font-heading italic text-2xl text-white tracking-tight uppercase mb-2 text-amber-500">Record Match Score</h3>
-            <p className="text-sm font-semibold text-white/90 mb-6">{fl(selFixture.home)} {selFixture.home} vs {selFixture.away} {fl(selFixture.away)}</p>
-            <div className="mb-6">
-              <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-2">Final scoreline</label>
-              <div className="frozen-inner rounded-xl p-4 flex items-center gap-3">
-                <div className="flex-1 text-center">
-                  <p className="text-[9px] text-white/45 uppercase tracking-wider mb-2 truncate">{selFixture.home}</p>
-                  <input className="input-glass w-full px-3 py-3 rounded-xl text-center text-lg font-semibold" type="number" min="0" placeholder="0" value={resHomeGoals} onChange={e => setResHomeGoals(e.target.value)} />
-                </div>
-                <span className="text-sm font-bold text-white/25 pt-5">–</span>
-                <div className="flex-1 text-center">
-                  <p className="text-[9px] text-white/45 uppercase tracking-wider mb-2 truncate">{selFixture.away}</p>
-                  <input className="input-glass w-full px-3 py-3 rounded-xl text-center text-lg font-semibold" type="number" min="0" placeholder="0" value={resAwayGoals} onChange={e => setResAwayGoals(e.target.value)} />
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <button className="btn-primary flex-1 py-3 rounded-full text-xs uppercase tracking-widest font-bold" onClick={handleSaveResult}>Save Score</button>
-              <button className="btn-secondary px-6 py-3 rounded-full text-xs font-semibold" onClick={() => setSelFixture(null)}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showAddMatch && isAdmin && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={e => e.target === e.currentTarget && setShowAddMatch(false)}>
-          <div className="liquid-glass p-6 w-full max-w-md rounded-[1.25rem] border border-white/15 shadow-2xl relative text-left">
-            <h3 className="font-heading italic text-2xl text-white tracking-tight uppercase mb-4 text-amber-500">
-              {editingMatch ? "Edit Knockout Match" : "Add Knockout Match"}
-            </h3>
-
-            <div className="mb-5">
-              <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-2">Knockout Round</label>
-              <div className="flex gap-1.5 flex-wrap">
-                {ROUNDS.map(r => (
-                  <button key={r}
-                    className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase border transition-all ${newRound === r ? "bg-white text-black border-white" : "bg-white/5 border-white/10 text-white/60 hover:text-white"}`}
-                    onClick={() => setNewRound(r)}>{r}</button>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center mb-5">
-              <div>
-                <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Home Team</label>
-                <input className="input-glass w-full px-3 py-2 rounded-lg text-xs" placeholder="e.g. Argentina" value={newHome} onChange={e => setNewHome(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 8, fontSize: 13 }} />
-              </div>
-              <span className="text-center text-[10px] font-bold text-white/20 mt-4 hidden md:inline">VS</span>
-              <div>
-                <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Away Team</label>
-                <input className="input-glass w-full px-3 py-2 rounded-lg text-xs" placeholder="e.g. France" value={newAway} onChange={e => setNewAway(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 8, fontSize: 13 }} />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 mb-5">
-              <div>
-                <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Match Date</label>
-                <input className="input-glass w-full px-3 py-2 rounded-lg text-xs" type="date" value={newDate} onChange={e => setNewDate(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 8, fontSize: 13 }} />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Kick-off Time</label>
-                <input className="input-glass w-full px-3 py-2 rounded-lg text-xs" type="time" value={newTime} onChange={e => setNewTime(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 8, fontSize: 13 }} />
-              </div>
-            </div>
-
-            <div className="mb-6">
-              <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Venue</label>
-              <input className="input-glass w-full px-3 py-2 rounded-lg text-xs" placeholder="e.g. MetLife Stadium, New York" value={newVenue} onChange={e => setNewVenue(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 8, fontSize: 13 }} />
-            </div>
-
-            <div className="flex gap-3">
-              <button className="btn-primary flex-1 py-3 rounded-full text-xs uppercase tracking-widest font-bold" onClick={handleSaveMatch}>{editingMatch ? "Update Match" : "Create Match"}</button>
-              <button className="btn-secondary px-6 py-3 rounded-full text-xs font-semibold" onClick={() => setShowAddMatch(false)}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {editFixture && isAdmin && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={e => e.target === e.currentTarget && setEditFixture(null)}>
-          <div className="liquid-glass p-6 w-full max-w-md rounded-[1.25rem] border border-white/15 shadow-2xl relative text-left">
-            <h3 className="font-heading italic text-2xl text-white tracking-tight uppercase mb-4 text-amber-500">
-              Edit Fixture
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center mb-5">
-              <div>
-                <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Home Team</label>
-                <input className="input-glass w-full px-3 py-2 rounded-lg text-xs" placeholder="Home" value={editFixtureHome} onChange={e => setEditFixtureHome(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 8, fontSize: 13 }} />
-              </div>
-              <span className="text-center text-[10px] font-bold text-white/20 mt-4 hidden md:inline">VS</span>
-              <div>
-                <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Away Team</label>
-                <input className="input-glass w-full px-3 py-2 rounded-lg text-xs" placeholder="Away" value={editFixtureAway} onChange={e => setEditFixtureAway(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 8, fontSize: 13 }} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4 mb-5">
-              <div>
-                <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Match Date</label>
-                <input className="input-glass w-full px-3 py-2 rounded-lg text-xs" type="date" value={editFixtureDate} onChange={e => setEditFixtureDate(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 8, fontSize: 13 }} />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Kick-off Time</label>
-                <input className="input-glass w-full px-3 py-2 rounded-lg text-xs" type="time" value={editFixtureTime} onChange={e => setEditFixtureTime(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 8, fontSize: 13 }} />
-              </div>
-            </div>
-            <div className="mb-6">
-              <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-1.5">Venue</label>
-              <input className="input-glass w-full px-3 py-2 rounded-lg text-xs" placeholder="e.g. MetLife Stadium" value={editFixtureVenue} onChange={e => setEditFixtureVenue(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 8, fontSize: 13 }} />
-            </div>
-            <div className="flex gap-3">
-              <button className="btn-primary flex-1 py-3 rounded-full text-xs uppercase tracking-widest font-bold" onClick={handleSaveFixtureEdit}>Save Changes</button>
-              <button className="btn-secondary px-6 py-3 rounded-full text-xs font-semibold" onClick={() => setEditFixture(null)}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showTeamPicker && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4" onTouchStart={handlePickerTouchStart} onTouchEnd={handlePickerTouchEnd}>
-          <div className="w-full max-w-lg text-center">
-            <h2 className="font-heading italic text-3xl uppercase tracking-tight text-white mb-2">Choose Your Team</h2>
-            <p className="text-xs text-white/50 mb-8">Pick the team you'll be supporting this World Cup</p>
-            <div className="relative w-full" style={{ height: "min(48vh, 420px)" }}>
-              {TEAMS.map((t, i) => (
-                <div key={t.name} className="absolute" style={getPickerRoleStyle(i, pickerTeamIndex)}>
-                  <img src={t.jersey} alt={t.name} className="w-full h-auto drop-shadow-2xl" onError={(e) => { e.target.src = JERSEY_PLACEHOLDER; }} />
-                </div>
-              ))}
-              <button className="hidden sm:flex absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 backdrop-blur-sm border border-white/15 items-center justify-center text-white hover:bg-white/20 transition-all z-30" onClick={() => navigatePicker("prev")}>&#8249;</button>
-              <button className="hidden sm:flex absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 backdrop-blur-sm border border-white/15 items-center justify-center text-white hover:bg-white/20 transition-all z-30" onClick={() => navigatePicker("next")}>&#8250;</button>
-            </div>
-            <div className="mt-4">
-              <span className="text-3xl">{fl(TEAMS[pickerTeamIndex]?.name)}</span>
-              <p className="text-sm font-semibold text-white mt-1">{TEAMS[pickerTeamIndex]?.name}</p>
-              <p className="text-[10px] text-white/40 uppercase tracking-wider mt-0.5">Group {TEAMS[pickerTeamIndex]?.group}</p>
-            </div>
-            <div className="flex gap-4 justify-center mt-8">
-              <button className="btn-primary px-10 py-3 rounded-full text-sm uppercase tracking-widest font-bold" onClick={() => handlePickTeam(TEAMS[pickerTeamIndex]?.name)}>
-                Choose {TEAMS[pickerTeamIndex]?.name}
-              </button>
-            </div>
-            <p className="text-xs text-white/30 mt-4 cursor-pointer hover:text-white/60 transition-colors inline-block" onClick={() => handlePickTeam(null)}>
-              I'd rather not prefer
-            </p>
-          </div>
-        </div>
-      )}
-
-    </div>
+      </div>
     </>
   );
 }
