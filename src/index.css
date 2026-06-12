@@ -193,7 +193,9 @@ body {
 }
 
 .liquid-glass {
-  background: rgba(8, 8, 12, 0.82);
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(255, 255, 255, 0.06) 0%, transparent 60%),
+    rgba(8, 8, 12, 0.82);
   backdrop-filter: blur(22px);
   -webkit-backdrop-filter: blur(22px);
   border: 1px solid rgba(255, 255, 255, 0.10);
@@ -204,20 +206,10 @@ body {
   overflow: hidden;
 }
 
-.liquid-glass::before {
-  content: '';
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  right: -50%;
-  bottom: -50%;
-  z-index: -1;
-  pointer-events: none;
-  background: radial-gradient(ellipse at 30% 20%, rgba(255, 255, 255, 0.04) 0%, transparent 60%);
-}
-
 .liquid-glass-strong {
-  background: rgba(5, 5, 8, 0.88);
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(255, 255, 255, 0.08) 0%, transparent 60%),
+    rgba(5, 5, 8, 0.88);
   backdrop-filter: blur(32px);
   -webkit-backdrop-filter: blur(32px);
   border: 1px solid rgba(255, 255, 255, 0.11);
@@ -226,18 +218,6 @@ body {
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
   isolation: isolate;
   overflow: hidden;
-}
-
-.liquid-glass-strong::before {
-  content: '';
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  right: -50%;
-  bottom: -50%;
-  z-index: -1;
-  pointer-events: none;
-  background: radial-gradient(ellipse at 30% 20%, rgba(255, 255, 255, 0.05) 0%, transparent 60%);
 }
 
 /* Frosted inner surface — simple gradient, no pseudo-element (reliable everywhere) */
