@@ -195,7 +195,7 @@ const OFFICIAL_RULES = [
   { num: 1, text: "All predictions must be submitted through the official Predizone website." },
   { num: 2, text: "Participants must log in using their full name, department, and year of study before submitting predictions." },
   { num: 3, text: "Predictions for each match will open in the morning and close 30 minutes before the match begins." },
-  { num: 4, text: "Participants must predict:", bullets: ["The winner of the match, and/or", "The exact final scoreline."] },
+  { num: 4, text: "Participants must enter the exact final scoreline (the winner is auto-detected from it)." },
   { num: 5, text: "Score predictions must be entered in the correct order. For example, if the match is Argentina vs Brazil and you predict 3–2, it means Argentina 3 – Brazil 2." },
   { num: 6, text: "Points will be awarded as follows:", bullets: ["Correct winner prediction: 3 points", "Correct scoreline prediction: 2 points", "Correct winner and scoreline prediction: 5 points"] },
   { num: 7, text: "Participants can track their scores and rankings through the Predizone leaderboard on the official website." },
@@ -615,8 +615,9 @@ export default function App() {
     if (!currentUser || !predFixture) return;
     const hasWinner = !!predWinner;
     const hasScore = predHomeGoals !== "" && predAwayGoals !== "" && !isNaN(predHomeGoals) && !isNaN(predAwayGoals) && parseInt(predHomeGoals, 10) >= 0 && parseInt(predAwayGoals, 10) >= 0;
-    if (!hasWinner && !hasScore) { showToast("Predict the winner and/or exact scoreline!", "error"); return; }
-    if (hasScore && hasWinner) {
+    if (!hasScore) { showToast("Enter the exact scoreline!", "error"); return; }
+    const effectiveWinner = hasWinner ? predWinner : winnerFromScore(predHomeGoals, predAwayGoals, predFixture.home, predFixture.away);
+    if (hasWinner && hasScore) {
       const derivedWinner = winnerFromScore(predHomeGoals, predAwayGoals, predFixture.home, predFixture.away);
       if (derivedWinner !== predWinner) { showToast("Winner must match your scoreline!", "error"); return; }
     }
@@ -626,8 +627,9 @@ export default function App() {
     if (predictions[key]) { showToast("Prediction already locked!", "error"); return; }
 
     await savePrediction(currentUser.id, predFixture.id, {
-      ...(hasWinner ? { winner: predWinner } : {}),
-      ...(hasScore ? { homeGoals: parseInt(predHomeGoals, 10), awayGoals: parseInt(predAwayGoals, 10) } : {}),
+      winner: effectiveWinner,
+      homeGoals: parseInt(predHomeGoals, 10),
+      awayGoals: parseInt(predAwayGoals, 10),
     });
 
     setPredFixture(null);
@@ -1470,7 +1472,7 @@ export default function App() {
                     <p className="text-xs text-white/40 max-w-sm mx-auto mt-2">Completed matches will appear here.</p>
                   </div>
                 ) : (
-                  finishedFixtures.filter(f => results[f.id]).map(fix => {
+                  [...finishedFixtures.filter(f => results[f.id])].reverse().map(fix => {
                     const key = `${currentUser.id}_${fix.id}`;
                     const myPred = predictions[key];
                     const res = results[fix.id];
@@ -1912,7 +1914,7 @@ export default function App() {
                 {finishedFixtures.filter(f => results[f.id]).length === 0 ? (
                       <p className="text-xs text-white/40 py-8 text-center">No finished matches.</p>
                     ) : (
-                      finishedFixtures.map(fix => {
+                      [...finishedFixtures].reverse().map(fix => {
                         const res = results[fix.id];
                         return (
                           <div key={fix.id} className="liquid-glass p-4 rounded-xl border border-white/5 flex items-center justify-between">
@@ -2148,7 +2150,7 @@ export default function App() {
             </div>
 
             <div className="mb-5">
-              <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-2">Select winner (optional)</label>
+              <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-2">Predict winner (or we'll use the scoreline)</label>
               <div className="flex gap-2">
                 {[predFixture.home, "Draw", predFixture.away].map(opt => (
                   <button key={opt}
@@ -2162,7 +2164,7 @@ export default function App() {
             </div>
 
             <div className="mb-6">
-              <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-2">Exact scoreline (optional)</label>
+              <label className="block text-[10px] font-bold text-white/70 uppercase tracking-wider mb-2">Exact scoreline (required)</label>
               <div className="frozen-inner rounded-xl p-4 flex items-center gap-3">
                 <div className="flex-1 text-center">
                   <p className="text-[9px] text-white/45 uppercase tracking-wider mb-2 truncate">{predFixture.home}</p>
@@ -2178,7 +2180,7 @@ export default function App() {
             </div>
 
             <div className="frozen-inner rounded-xl p-3.5 text-[11px] text-white/50 leading-relaxed mb-6">
-              Predict the winner, the exact scoreline, or both. Once submitted, your prediction is <strong className="text-white">locked and cannot be modified</strong>.
+              Enter the scoreline &mdash; we'll auto-detect the winner. Once submitted, your prediction is <strong className="text-white">locked and cannot be modified</strong>.
             </div>
 
             <div className="flex gap-3">
