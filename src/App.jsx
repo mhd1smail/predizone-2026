@@ -916,7 +916,14 @@ export default function App() {
   );
 
   return (
-    <div className="relative w-full overflow-hidden text-white font-body selection:bg-white/20">
+    <>
+      {page === "splash" && !currentUser && !needsProfile && (
+        <FixedVideoBackground src={HERO_VIDEO_SRC} fallbackSrc={HERO_VIDEO_FALLBACK} />
+      )}
+      {currentUser && !needsProfile && !isAdmin && (
+        <FixedVideoBackground src={DASHBOARD_VIDEO_SRC} fallbackSrc={HERO_VIDEO_FALLBACK} muted={isMuted} />
+      )}
+      <div className="relative w-full text-white font-body selection:bg-white/20">
 
       {toast && (
         <div className="toast-msg glass-panel p-4 rounded-[1.25rem] flex items-center gap-3 bg-black/90 border border-white/25 shadow-2xl max-w-sm pointer-events-auto">
@@ -929,8 +936,6 @@ export default function App() {
 
       {page === "splash" && !currentUser && !needsProfile && (
         <>
-          <FixedVideoBackground src={HERO_VIDEO_SRC} fallbackSrc={HERO_VIDEO_FALLBACK} />
-
           <nav className="fixed top-4 left-0 w-full px-8 lg:px-16 z-50 flex items-center justify-between pointer-events-auto">
             <button type="button" className="liquid-glass px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-full cursor-pointer select-none" onClick={() => scrollToSlide(0)}>
               <span className="font-heading italic text-base sm:text-xl tracking-tight text-white uppercase font-bold">PREDIZONE</span>
@@ -1234,9 +1239,6 @@ export default function App() {
         </div>
       )}
 
-      {currentUser && !needsProfile && !isAdmin && (
-        <FixedVideoBackground src={DASHBOARD_VIDEO_SRC} fallbackSrc={HERO_VIDEO_FALLBACK} muted={isMuted} />
-      )}
 
       {currentUser && !needsProfile && (
         <div className="max-w-3xl mx-auto px-4 h-screen flex flex-col pt-4 relative z-10 no-scrollbar">
@@ -2568,5 +2570,6 @@ export default function App() {
       )}
 
     </div>
+    </>
   );
 }
