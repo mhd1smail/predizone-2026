@@ -1,10 +1,10 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, ArrowUpRight, Play, Award, LogOut, CheckCircle, User, Zap, Mail, Target, Lock, Unlock, Eye, Trophy, Calendar, Volume2, VolumeX } from "lucide-react";
+import { ArrowLeft, ArrowRight, ArrowUpRight, Play, Award, LogOut, CheckCircle, User, Zap, Mail, Target, Lock, Unlock, Eye, Trophy, Calendar, Volume2, VolumeX, Tv } from "lucide-react";
 import { useAuth } from "./context/AuthContext";
-import { signInWithGoogle, signOutUser } from "./firebase/auth";
-import { createUserProfile, getUserProfile, onAllUsers, savePrediction, saveResult, deleteKnockoutMatch, saveKnockoutMatch, onAllPredictions, onAllResults, onKnockoutMatches, onArenaSettings, updateArenaSettings, onFixtureOverrides, saveFixtureOverride, onUndoStatus, setUndoPoint, undoLastFixtureEdit } from "./firebase/firestore";
+import { signInWithGoogle, signOutUser } from "./lib/auth";
+import { createUserProfile, getUserProfile, onAllUsers, savePrediction, saveResult, deleteKnockoutMatch, saveKnockoutMatch, onAllPredictions, onAllResults, onKnockoutMatches, onArenaSettings, updateArenaSettings, onFixtureOverrides, saveFixtureOverride, onUndoStatus, setUndoPoint, undoLastFixtureEdit, updateUserProfile, submitStreamResponse, onStreamResponses, clearStreamPoll } from "./lib/db";
 
 const FIXTURES = [
   // Group A
@@ -431,7 +431,7 @@ function BlurText({ text, className }) {
 }
 
 export default function App() {
-  const { currentUser, isAdmin, loading: authLoading, setCurrentUser } = useAuth();
+  const { currentUser, isAdmin, loading: authLoading, setCurrentUser, pendingAuthUser } = useAuth();
   const [page, setPage] = useState("splash");
   const [userTab, setUserTab] = useState("fixtures");
   const [users, setUsers] = useState({});
@@ -463,12 +463,16 @@ export default function App() {
   const [editingMatch, setEditingMatch] = useState(null);
   const [fixtureOverrides, setFixtureOverrides] = useState({});
   const [undoInfo, setUndoInfo] = useState(null);
+  const [streamResponses, setStreamResponses] = useState({});
   const [editFixture, setEditFixture] = useState(null);
   const [editFixtureHome, setEditFixtureHome] = useState("");
   const [editFixtureAway, setEditFixtureAway] = useState("");
   const [editFixtureDate, setEditFixtureDate] = useState("");
   const [editFixtureTime, setEditFixtureTime] = useState("");
   const [editFixtureVenue, setEditFixtureVenue] = useState("");
+  const [showTeamPicker, setShowTeamPicker] = useState(false);
+  const [pickerTeamIndex, setPickerTeamIndex] = useState(0);
+  const pickerSwipeStart = useRef(null);
   const [newRound, setNewRound] = useState("Round of 32");
   const [newHome, setNewHome] = useState("");
   const [newAway, setNewAway] = useState("");
@@ -477,7 +481,6 @@ export default function App() {
   const [newVenue, setNewVenue] = useState("");
   const [signingIn, setSigningIn] = useState(false);
   const [needsProfile, setNeedsProfile] = useState(false);
-  const [pendingFbUser, setPendingFbUser] = useState(null);
   const containerRef = useRef(null);
 
   const showToast = (msg, type = "success") => {
@@ -524,6 +527,22 @@ export default function App() {
   }, [currentUser, authLoading]);
 
   useEffect(() => {
+    if (currentUser && currentUser.favoriteTeam === undefined && !currentUser.isAdmin) {
+      setPickerTeamIndex(0);
+      setShowTeamPicker(true);
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (pendingAuthUser && !currentUser) {
+      setNeedsProfile(true);
+      setRegisterName(pendingAuthUser.user_metadata?.full_name || "");
+      setRegisterDept("");
+      setRegisterYear("1st Year");
+    }
+  }, [pendingAuthUser, currentUser]);
+
+  useEffect(() => {
     const unsubArena = onArenaSettings((s) => setArenaSettings(s));
     const unsubOverrides = onFixtureOverrides((o) => setFixtureOverrides(o));
     return () => { unsubArena(); unsubOverrides(); };
@@ -532,6 +551,11 @@ export default function App() {
   useEffect(() => {
     const unsubUndo = onUndoStatus((info) => setUndoInfo(info));
     return () => unsubUndo();
+  }, []);
+
+  useEffect(() => {
+    const unsubStream = onStreamResponses((r) => setStreamResponses(r));
+    return () => unsubStream();
   }, []);
 
   useEffect(() => {
@@ -550,27 +574,15 @@ export default function App() {
   const handleGoogleSignIn = async () => {
     if (signingIn) return;
     setSigningIn(true);
-    const { user: fbUser, error } = await signInWithGoogle();
+    const { user, error } = await signInWithGoogle();
     setSigningIn(false);
     if (error) { showToast(error, "error"); return; }
-    if (!fbUser) { showToast("Sign in cancelled.", "error"); return; }
-
-    const profile = await getUserProfile(fbUser.uid);
-    if (profile) {
-      setCurrentUser(profile);
-      if (profile.isAdmin) { setPage("admin"); } else { setPage("home"); }
-      showToast(`Welcome back, ${profile.name}!`);
-    } else {
-      setPendingFbUser(fbUser);
-      setRegisterName(normaliseName(fbUser.displayName || ""));
-      setRegisterDept("");
-      setRegisterYear("1st Year");
-      setNeedsProfile(true);
-    }
+    if (!user) { showToast("Sign in cancelled.", "error"); return; }
+    // Supabase redirects to Google — session handled by onAuthStateChange
   };
 
   const handleCompleteRegistration = async () => {
-    if (!needsProfile || !pendingFbUser) return;
+    if (!needsProfile || !pendingAuthUser) return;
 
     const rawName = registerName.trim();
     const rawDept = registerDept.trim();
@@ -580,21 +592,19 @@ export default function App() {
 
     const name = normaliseName(rawName);
     const dept = normaliseDept(rawDept);
-    const fbUser = pendingFbUser;
 
-    const uid = fbUser.uid;
+    const uid = pendingAuthUser.id;
     await createUserProfile(uid, {
       name,
       dept,
       year: registerYear,
-      email: fbUser.email || "",
-      photoURL: fbUser.photoURL || "",
+      email: pendingAuthUser.email || "",
+      photoURL: pendingAuthUser.user_metadata?.avatar_url || "",
     });
 
     const profile = await getUserProfile(uid);
     setCurrentUser(profile);
     setNeedsProfile(false);
-    setPendingFbUser(null);
     setPage("home");
     showToast(`Account registered! Welcome to the Arena, ${name}!`);
   };
@@ -604,7 +614,6 @@ export default function App() {
     setPage("splash");
     setCurrentSlide(0);
     setNeedsProfile(false);
-    setPendingFbUser(null);
     if (window.history.pushState) {
       const newurl = window.location.protocol + "//" + window.location.host + window.location.pathname;
       window.history.pushState({ path: newurl }, '', newurl);
@@ -716,6 +725,45 @@ export default function App() {
     const deltaX = e.changedTouches[0].clientX - jerseySwipeStart.current;
     if (Math.abs(deltaX) > 48) navigateTeams(deltaX < 0 ? "next" : "prev");
     jerseySwipeStart.current = null;
+  };
+
+  const navigatePicker = (dir) => {
+    setPickerTeamIndex((prev) => {
+      if (dir === "next") return (prev + 1) % TEAMS.length;
+      return (prev - 1 + TEAMS.length) % TEAMS.length;
+    });
+  };
+  const handlePickerTouchStart = (e) => { pickerSwipeStart.current = e.touches[0].clientX; };
+  const handlePickerTouchEnd = (e) => {
+    if (pickerSwipeStart.current === null) return;
+    const deltaX = e.changedTouches[0].clientX - pickerSwipeStart.current;
+    if (Math.abs(deltaX) > 48) navigatePicker(deltaX < 0 ? "next" : "prev");
+    pickerSwipeStart.current = null;
+  };
+  const getPickerRoleStyle = (i, activeIdx) => {
+    const total = TEAMS.length;
+    let diff = i - activeIdx;
+    if (diff > total / 2) diff -= total;
+    if (diff < -total / 2) diff += total;
+    const baseTransition = "transform 500ms cubic-bezier(0.4,0,0.2,1), opacity 500ms cubic-bezier(0.4,0,0.2,1)";
+    if (diff === 0) {
+      return { display: "block", top: "50%", left: "50%", transform: "translate(-50%, -50%) scale(1)", filter: "brightness(1)", zIndex: 20, opacity: 1, width: "min(68vw, 300px)", height: "min(42vh, 360px)", transition: baseTransition };
+    } else if (Math.abs(diff) === 1) {
+      const side = diff > 0 ? 1 : -1;
+      return { display: "block", top: "50%", left: "50%", transform: `translate(calc(-50% + ${side * 34}%), -50%) scale(0.82)`, filter: "brightness(0.72)", zIndex: 10, opacity: 0.85, width: "min(52vw, 230px)", height: "min(34vh, 300px)", transition: baseTransition };
+    } else if (Math.abs(diff) === 2) {
+      const side = diff > 0 ? 1 : -1;
+      return { display: "block", top: "50%", left: "50%", transform: `translate(calc(-50% + ${side * 68}%), -50%) scale(0.55)`, filter: "brightness(0.45)", zIndex: 1, opacity: 0, width: "min(38vw, 170px)", height: "min(24vh, 220px)", transition: baseTransition };
+    } else {
+      return { display: "none" };
+    }
+  };
+
+  const handlePickTeam = async (team) => {
+    if (!currentUser) return;
+    await updateUserProfile(currentUser.id, { favoriteTeam: team });
+    setCurrentUser({ ...currentUser, favoriteTeam: team });
+    setShowTeamPicker(false);
   };
 
   const openAddMatch = (fix = null) => {
@@ -1069,13 +1117,13 @@ export default function App() {
         </>
       )}
 
-      {needsProfile && pendingFbUser && (
+      {needsProfile && pendingAuthUser && (
         <div className="fixed inset-0 z-[999] flex items-start sm:items-center justify-center p-4 overflow-y-auto" style={{ background: "rgba(0,0,0,0.92)", backdropFilter: "blur(18px)" }}>
           <div className="w-full max-w-md my-4">
             <div className="liquid-glass-strong rounded-[1.5rem] border border-white/15 shadow-2xl overflow-hidden">
               <div className="bg-gradient-to-r from-green-900/60 to-emerald-900/40 border-b border-white/10 px-8 pt-8 pb-6 text-center">
-                {pendingFbUser.photoURL ? (
-                  <img src={pendingFbUser.photoURL} alt="Profile" className="w-20 h-20 rounded-full border-4 border-white/20 mx-auto mb-4 shadow-xl" />
+                {pendingAuthUser.user_metadata?.avatar_url ? (
+                  <img src={pendingAuthUser.user_metadata.avatar_url} alt="Profile" className="w-20 h-20 rounded-full border-4 border-white/20 mx-auto mb-4 shadow-xl" />
                 ) : (
                   <div className="w-20 h-20 rounded-full bg-white/10 border border-white/20 flex items-center justify-center mx-auto mb-4">
                     <User className="h-8 w-8 text-white" />
@@ -1087,7 +1135,7 @@ export default function App() {
                 </div>
                 <h2 className="font-heading italic text-white text-2xl uppercase tracking-tight leading-tight">One Last Step</h2>
                 <p className="text-white/50 text-xs mt-1">
-                  Hey <span className="text-white font-semibold">{pendingFbUser.displayName?.split(" ")[0] || "there"}</span>, complete your campus profile to enter the arena.
+                  Hey <span className="text-white font-semibold">{pendingAuthUser.user_metadata?.full_name?.split(" ")[0] || "there"}</span>, complete your campus profile to enter the arena.
                 </p>
               </div>
               <div className="px-8 py-6 space-y-4">
@@ -1158,6 +1206,9 @@ export default function App() {
                   <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "fixtures" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => setUserTab("fixtures")}>
                     <Target className="h-3 w-3 inline mr-1" />Predict
                   </button>
+                  <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "stream" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => setUserTab("stream")}>
+                    <Tv className="h-3 w-3 inline mr-1" />Stream
+                  </button>
                   <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "upcoming" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => setUserTab("upcoming")}>
                     <Calendar className="h-3 w-3 inline mr-1" />All
                   </button>
@@ -1175,6 +1226,7 @@ export default function App() {
                 <span className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white/60">Admin Console</span>
               )}
             </div>
+            <p className="text-[9px] text-white/20 text-center mt-2 sm:hidden select-none">swipe →</p>
           </header>
           <audio ref={audioRef} src={BG_MUSIC_SRC} loop autoPlay />
           <div className="pb-8 flex-1 overflow-y-auto no-scrollbar flex flex-col pb-4 pb-safe">
@@ -1189,7 +1241,7 @@ export default function App() {
                       <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center border border-white/15 shrink-0"><User className="h-4 w-4 text-white" /></div>
                     )}
                     <div className="min-w-0">
-                      <h3 className="text-sm font-semibold text-white/95 flex items-center gap-1 truncate">{currentUser.name} <Zap className="h-3.5 w-3.5 text-amber-400 fill-current shrink-0" /></h3>
+                      <h3 className="text-sm font-semibold text-white/95 flex items-center gap-1 truncate">{currentUser.favoriteTeam && <span className="text-base">{fl(currentUser.favoriteTeam)}</span>}{currentUser.name} <Zap className="h-3.5 w-3.5 text-amber-400 fill-current shrink-0" /></h3>
                       <span className="text-[10px] text-white/40 uppercase tracking-widest mt-0.5 block truncate">{currentUser.dept} • {currentUser.year || "1st Year"} • {currentUser.email}</span>
                     </div>
                   </div>
@@ -1224,8 +1276,9 @@ export default function App() {
                   const res = results[fix.id];
                   const pts = myPred && res ? calcPoints(myPred, res, fix) : null;
                   const canPredict = status === "open" && !myPred;
+                  const isGold = currentUser?.favoriteTeam && (fix.home === currentUser.favoriteTeam || fix.away === currentUser.favoriteTeam);
                   return (
-                    <div key={fix.id} className="liquid-glass p-6 rounded-[1.5rem] border border-white/10 text-center">
+                    <div key={fix.id} className={`liquid-glass p-6 rounded-[1.5rem] border ${isGold ? "card-gold" : "border-white/10"} text-center`}>
                       <div className="flex justify-between items-center mb-4">
                         <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest">{fix.isKnockout ? fix.round : `Group ${fix.group}`}</span>
                         <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${status === "open" ? "bg-green-950 text-green-400 border border-green-800" : status === "played" ? "bg-blue-950 text-blue-400 border border-blue-800" : "bg-amber-950/80 text-amber-400 border border-amber-900"}`}>{status}</span>
@@ -1398,6 +1451,52 @@ export default function App() {
               );
             })()}
 
+            {/* ─── USER: Stream Poll ─── */}
+            {userTab === "stream" && !isAdmin && (() => {
+              const myResponse = currentUser ? streamResponses[currentUser.id] : null;
+              const yesCount = Object.values(streamResponses).filter(r => r.response === "yes").length;
+              const noCount = Object.values(streamResponses).filter(r => r.response === "no").length;
+              const total = yesCount + noCount;
+              return (
+                <div className="space-y-4">
+                  <div className="text-left mb-6">
+                    <h2 className="font-heading italic text-3xl uppercase tracking-tight text-white">LIVE STREAM</h2>
+                    <p className="text-xs text-white/50 mt-1 uppercase tracking-wider">Would you like live streaming of matches here?</p>
+                  </div>
+                  <div className="liquid-glass p-6 rounded-xl border border-white/5 text-center">
+                    {currentUser && !myResponse ? (
+                      <>
+                        <h3 className="font-heading italic text-xl text-white mb-6">Would you like live streaming of World Cup matches here?</h3>
+                        <div className="flex gap-4 justify-center">
+                          <button className="btn-primary px-8 py-3 rounded-full text-sm uppercase tracking-widest font-bold bg-green-600 hover:bg-green-500" onClick={async () => { await submitStreamResponse(currentUser.id, "yes"); }}>
+                            Yes
+                          </button>
+                          <button className="btn-primary px-8 py-3 rounded-full text-sm uppercase tracking-widest font-bold bg-red-600 hover:bg-red-500" onClick={async () => { await submitStreamResponse(currentUser.id, "no"); }}>
+                            No
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <div>
+                        <h3 className="font-heading italic text-lg text-white mb-2">You voted: <span className={myResponse?.response === "yes" ? "text-green-400" : "text-red-400"}>{myResponse?.response === "yes" ? "Yes" : "No"}</span></h3>
+                        {total > 0 && (
+                          <div className="w-full bg-white/10 rounded-full h-4 mt-4 overflow-hidden flex">
+                            <div className="bg-green-500 h-full transition-all" style={{ width: `${(yesCount / total) * 100}%` }} />
+                            <div className="bg-red-500 h-full transition-all" style={{ width: `${(noCount / total) * 100}%` }} />
+                          </div>
+                        )}
+                        <div className="flex justify-center gap-8 mt-4 text-sm">
+                          <span className="text-green-400 font-semibold">{yesCount} Yes ({total > 0 ? Math.round((yesCount / total) * 100) : 0}%)</span>
+                          <span className="text-red-400 font-semibold">{noCount} No ({total > 0 ? Math.round((noCount / total) * 100) : 0}%)</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-[9px] text-white/30 text-center">One vote per person. Results will reset after 12 hours.</p>
+                </div>
+              );
+            })()}
+
             {/* ─── USER: All Fixtures ─── */}
             {userTab === "upcoming" && !isAdmin && (
               <div className="space-y-4">
@@ -1418,8 +1517,9 @@ export default function App() {
                     const myPred = predictions[key];
                     const res = results[fix.id];
                     const pts = res && myPred ? calcPoints(myPred, res, fix) : null;
+                    const isGold = currentUser?.favoriteTeam && (fix.home === currentUser.favoriteTeam || fix.away === currentUser.favoriteTeam);
                     return (
-                      <div key={fix.id} className="liquid-glass p-4 rounded-xl border border-white/5 flex items-center justify-between text-left">
+                      <div key={fix.id} className={`liquid-glass p-4 rounded-xl border ${isGold ? "card-gold" : "border-white/5"} flex items-center justify-between text-left`}>
                         <div className="flex items-center gap-4 flex-1">
                           <div className="text-center min-w-[50px]">
                             <span className="text-xs font-semibold text-white/70 block">{new Date(fix.date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</span>
@@ -1477,8 +1577,9 @@ export default function App() {
                     const myPred = predictions[key];
                     const res = results[fix.id];
                     const pts = res && myPred ? calcPoints(myPred, res, fix) : null;
+                    const isGold = currentUser?.favoriteTeam && (fix.home === currentUser.favoriteTeam || fix.away === currentUser.favoriteTeam);
                     return (
-                      <div key={fix.id} className="liquid-glass p-6 rounded-[1.5rem] border border-white/10 text-center">
+                      <div key={fix.id} className={`liquid-glass p-6 rounded-[1.5rem] border ${isGold ? "card-gold" : "border-white/10"} text-center`}>
                         <div className="flex justify-between items-center mb-4">
                           <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest">{fix.isKnockout ? fix.round : `Group ${fix.group}`}</span>
                           <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-950 text-blue-400 border border-blue-800">FT</span>
@@ -1577,13 +1678,13 @@ export default function App() {
               <div>
                 <div className="text-left mb-6">
                   <h2 className="font-heading italic text-3xl uppercase tracking-tight text-white">CAMPUS LEADERBOARD</h2>
-                  <p className="text-xs text-white/50 mt-1 uppercase tracking-wider">{leaderboard.length} students registered</p>
+                  <p className="text-xs text-white/50 mt-1 uppercase tracking-wider">{leaderboard.filter(u => !u.isAdmin).length} students registered</p>
                 </div>
                 <div className="space-y-2">
-                  {leaderboard.map((u, i) => {
+                  {leaderboard.filter(u => !u.isAdmin).map((u, i) => {
                     const isMe = u.id === currentUser.id;
                     return (
-                      <div key={u.id} className={`liquid-glass p-4 rounded-xl flex items-center gap-4 ${isMe ? "border border-white/20 bg-white/5" : "border border-white/5"}`}>
+                      <div key={u.id} className={`liquid-glass p-4 rounded-xl flex items-center gap-4 ${isMe ? "card-gold" : "border border-white/5"}`}>
                         <span className="font-heading italic text-lg font-bold w-10 text-center text-white/60">
                           {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`}
                         </span>
@@ -1594,6 +1695,7 @@ export default function App() {
                         )}
                         <div className="flex-1 text-left">
                           <h4 className="text-sm font-semibold text-white leading-tight">
+                            {u.favoriteTeam && <span className="inline-block mr-1.5 align-middle text-base">{fl(u.favoriteTeam)}</span>}
                             {u.name} {isMe && <span className="text-[10px] text-white/55 font-normal ml-1">(You)</span>}
                           </h4>
                           <p className="text-[10px] text-white/40 uppercase tracking-widest mt-0.5">{u.dept} • {u.year || "1st Year"}</p>
@@ -1609,9 +1711,10 @@ export default function App() {
             {/* ─── USER: You (Profile & Stats) ─── */}
             {userTab === "you" && !isAdmin && (() => {
               const stats = getUserStats(currentUser.id, predictions, results, allFixtures);
-              const myLeader = leaderboard.find(l => l.id === currentUser.id);
+              const nonAdminLeaderboard = leaderboard.filter(u => !u.isAdmin);
+              const myLeader = nonAdminLeaderboard.find(l => l.id === currentUser.id);
               const myPoints = myLeader?.points || 0;
-              const rank = leaderboard.findIndex(l => l.id === currentUser.id) + 1;
+              const rank = nonAdminLeaderboard.findIndex(l => l.id === currentUser.id) + 1;
               const myPredsList = Object.values(predictions).filter(p => p.uid === currentUser.id)
                 .sort((a, b) => {
                   const fixA = allFixtures.find(f => String(f.id) === String(a.fixtureId));
@@ -1681,6 +1784,19 @@ export default function App() {
                     </div>
                   </div>
 
+                  {currentUser.favoriteTeam && (
+                    <div className="liquid-glass p-5 rounded-xl border border-white/5 text-center">
+                      <p className="text-[9px] text-white/50 uppercase tracking-widest mb-2">Your Supported Team</p>
+                      <div className="flex items-center justify-center gap-3">
+                        <img src={teamJerseyPath(currentUser.favoriteTeam)} alt={currentUser.favoriteTeam} className="w-12 h-16 sm:w-16 sm:h-20 object-contain" onError={(e) => { e.target.style.display = "none"; }} />
+                        <div className="text-left">
+                          <span className="text-2xl block">{fl(currentUser.favoriteTeam)}</span>
+                          <span className="text-sm font-semibold text-white">{currentUser.favoriteTeam}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="text-left">
                     <h3 className="font-heading italic text-xl uppercase tracking-tight text-white mb-4">Prediction History</h3>
                   </div>
@@ -1695,8 +1811,9 @@ export default function App() {
                         const fix = allFixtures.find(f => String(f.id) === String(pred.fixtureId));
                         const res = results[pred.fixtureId];
                         const pts = fix && res ? calcPoints(pred, res, fix) : null;
+                        const isGold = fix && currentUser?.favoriteTeam && (fix.home === currentUser.favoriteTeam || fix.away === currentUser.favoriteTeam);
                         return (
-                          <div key={pred.id || `${pred.uid}_${pred.fixtureId}`} className="liquid-glass p-4 rounded-xl border border-white/5">
+                          <div key={pred.id || `${pred.uid}_${pred.fixtureId}`} className={`liquid-glass p-4 rounded-xl border ${isGold ? "card-gold" : "border-white/5"}`}>
                             <div className="flex justify-between items-start">
                               <div>
                                 <p className="text-xs font-semibold text-white">
@@ -1745,7 +1862,7 @@ export default function App() {
                 </div>
 
                 <div className="flex gap-1 p-1 rounded-xl bg-white/5 border border-white/5 mb-6 overflow-x-auto no-scrollbar">
-                  {["results", "matches", "custommatch", "winners", "upcoming", "finished", "leaderboard", "participants"].map((tab) => (
+                  {["results", "matches", "custommatch", "winners", "upcoming", "finished", "stream", "leaderboard", "participants"].map((tab) => (
                     <button key={tab}
                       className={`px-3 py-1.5 rounded-lg text-[9px] font-semibold uppercase tracking-wider whitespace-nowrap transition-colors ${adminTab === tab ? "bg-white text-black" : "text-white/60 hover:text-white border border-white/10"}`}
                       onClick={() => setAdminTab(tab)}>{tab === "custommatch" ? "Custom Match" : tab === "winners" ? "Winners" : tab}</button>
@@ -1764,8 +1881,9 @@ export default function App() {
                     </div>
                     {mergeFixtures(FIXTURES, fixtureOverrides || {}).filter(f => f.group === adminGroup).map(fix => {
                       const res = results[fix.id];
+                      const isGold = currentUser?.favoriteTeam && (fix.home === currentUser.favoriteTeam || fix.away === currentUser.favoriteTeam);
                       return (
-                        <div key={fix.id} className="liquid-glass p-4 rounded-xl border border-white/5 flex items-center justify-between text-left">
+                        <div key={fix.id} className={`liquid-glass p-4 rounded-xl border ${isGold ? "card-gold" : "border-white/5"} flex items-center justify-between text-left`}>
                           <div>
                             <h4 className="text-sm font-semibold text-white">{fl(fix.home)} {fix.home} vs {fix.away} {fl(fix.away)}</h4>
                             <p className="text-[10px] text-white/40 mt-1">{formatDate(fix.date)}</p>
@@ -1791,8 +1909,9 @@ export default function App() {
                     ) : (
                       knockoutFixtures.map(fix => {
                         const res = results[fix.id];
+                        const isGold = currentUser?.favoriteTeam && (fix.home === currentUser.favoriteTeam || fix.away === currentUser.favoriteTeam);
                         return (
-                          <div key={fix.id} className="liquid-glass p-4 rounded-xl border border-white/5 flex flex-col text-left">
+                          <div key={fix.id} className={`liquid-glass p-4 rounded-xl border ${isGold ? "card-gold" : "border-white/5"} flex flex-col text-left`}>
                             <div className="flex justify-between items-start">
                               <div>
                                 <span className="bg-white/10 border border-white/10 px-2.5 py-0.5 rounded text-[10px] text-white font-bold uppercase tracking-wider">{fix.round || "Custom"}</span>
@@ -1859,8 +1978,9 @@ export default function App() {
                     <p className="text-[11px] text-white/50 uppercase tracking-wider mb-4">Enter results for any match</p>
                     {allFixtures.filter(f => new Date(f.date) < new Date()).sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 20).map(fix => {
                       const res = results[fix.id];
+                      const isGold = currentUser?.favoriteTeam && (fix.home === currentUser.favoriteTeam || fix.away === currentUser.favoriteTeam);
                       return (
-                        <div key={fix.id} className="liquid-glass p-4 rounded-xl border border-white/5 flex items-center justify-between text-left">
+                        <div key={fix.id} className={`liquid-glass p-4 rounded-xl border ${isGold ? "card-gold" : "border-white/5"} flex items-center justify-between text-left`}>
                           <div>
                             <h4 className="text-sm font-semibold text-white">{fl(fix.home)} {fix.home} vs {fix.away} {fl(fix.away)}</h4>
                             <p className="text-[10px] text-white/40 mt-1">{formatDate(fix.date)}</p>
@@ -1884,8 +2004,9 @@ export default function App() {
                       upcomingFiltered.map(fix => {
                         const status = getStatus(fix, isLockedGlobal);
                         const res = results[fix.id];
+                        const isGold = currentUser?.favoriteTeam && (fix.home === currentUser.favoriteTeam || fix.away === currentUser.favoriteTeam);
                         return (
-                          <div key={fix.id} className="liquid-glass p-4 rounded-xl border border-white/5 flex items-center justify-between">
+                          <div key={fix.id} className={`liquid-glass p-4 rounded-xl border ${isGold ? "card-gold" : "border-white/5"} flex items-center justify-between`}>
                             <div>
                               <span className="text-[10px] text-white/50">{fix.isKnockout ? fix.round : `Group ${fix.group}`}</span>
                               <h4 className="text-sm font-semibold text-white mt-1">{fl(fix.home)} {fix.home} vs {fix.away} {fl(fix.away)}</h4>
@@ -1916,8 +2037,9 @@ export default function App() {
                     ) : (
                       [...finishedFixtures].reverse().map(fix => {
                         const res = results[fix.id];
+                        const isGold = currentUser?.favoriteTeam && (fix.home === currentUser.favoriteTeam || fix.away === currentUser.favoriteTeam);
                         return (
-                          <div key={fix.id} className="liquid-glass p-4 rounded-xl border border-white/5 flex items-center justify-between">
+                          <div key={fix.id} className={`liquid-glass p-4 rounded-xl border ${isGold ? "card-gold" : "border-white/5"} flex items-center justify-between`}>
                             <div>
                               <span className="text-[10px] text-white/50">{fix.isKnockout ? fix.round : `Group ${fix.group}`}</span>
                               <h4 className="text-sm font-semibold text-white mt-1">{fl(fix.home)} {fix.home} vs {fix.away} {fl(fix.away)}</h4>
@@ -1937,6 +2059,45 @@ export default function App() {
                         );
                       })
                     )}
+                  </div>
+                )}
+
+                {adminTab === "stream" && (
+                  <div className="space-y-4">
+                    <div className="text-left">
+                      <h3 className="font-heading italic text-xl uppercase tracking-tight text-white mb-2">Stream Poll</h3>
+                      <p className="text-xs text-white/50">Would you like live streaming of matches here?</p>
+                    </div>
+                    {(() => {
+                      const yesCount = Object.values(streamResponses).filter(r => r.response === "yes").length;
+                      const noCount = Object.values(streamResponses).filter(r => r.response === "no").length;
+                      const total = yesCount + noCount;
+                      return (
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="liquid-glass p-4 rounded-xl border border-white/5 text-center">
+                            <p className="text-2xl font-bold text-white">{total}</p>
+                            <p className="text-[9px] text-white/50 uppercase tracking-widest mt-1">Total Votes</p>
+                          </div>
+                          <div className="liquid-glass p-4 rounded-xl border border-white/5 text-center">
+                            <p className="text-2xl font-bold text-green-400">{yesCount}</p>
+                            <p className="text-[9px] text-white/50 uppercase tracking-widest mt-1">Yes</p>
+                          </div>
+                          <div className="liquid-glass p-4 rounded-xl border border-white/5 text-center">
+                            <p className="text-2xl font-bold text-red-400">{noCount}</p>
+                            <p className="text-[9px] text-white/50 uppercase tracking-widest mt-1">No</p>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    {Object.values(streamResponses).filter(r => r.response === "yes" || r.response === "no").length > 0 && (
+                      <div className="w-full bg-white/10 rounded-full h-4 overflow-hidden flex">
+                        <div className="bg-green-500 h-full transition-all" style={{ width: `${(Object.values(streamResponses).filter(r => r.response === "yes").length / Math.max(Object.values(streamResponses).filter(r => r.response === "yes" || r.response === "no").length, 1)) * 100}%` }} />
+                        <div className="bg-red-500 h-full transition-all" style={{ width: `${(Object.values(streamResponses).filter(r => r.response === "no").length / Math.max(Object.values(streamResponses).filter(r => r.response === "yes" || r.response === "no").length, 1)) * 100}%` }} />
+                      </div>
+                    )}
+                    <button className="btn-secondary px-4 py-2 rounded-lg text-xs font-semibold border-red-500/30 text-red-400 hover:bg-red-500/10" onClick={async () => { await clearStreamPoll(); }}>
+                      Clear All Responses
+                    </button>
                   </div>
                 )}
 
@@ -1980,9 +2141,9 @@ export default function App() {
                 {adminTab === "participants" && viewingParticipant && (() => {
                   const u = viewingParticipant;
                   const stats = getUserStats(u.id, predictions, results, allFixtures);
-                  const pLeader = leaderboard.find(l => l.id === u.id);
+                  const pLeader = leaderboard.filter(u2 => !u2.isAdmin).find(l => l.id === u.id);
                   const pPoints = pLeader?.points || 0;
-                  const rank = leaderboard.findIndex(l => l.id === u.id) + 1;
+                  const rank = leaderboard.filter(u2 => !u2.isAdmin).findIndex(l => l.id === u.id) + 1;
                   const pPredsList = Object.values(predictions).filter(p => p.uid === u.id)
                     .sort((a, b) => {
                       const fixA = allFixtures.find(f => String(f.id) === String(a.fixtureId));
@@ -2072,8 +2233,9 @@ export default function App() {
                             const fix = allFixtures.find(f => String(f.id) === String(pred.fixtureId));
                             const res = results[pred.fixtureId];
                             const pts = fix && res ? calcPoints(pred, res, fix) : null;
+                            const isGold = fix && currentUser?.favoriteTeam && (fix.home === currentUser.favoriteTeam || fix.away === currentUser.favoriteTeam);
                             return (
-                              <div key={pred.id || `${pred.uid}_${pred.fixtureId}`} className="liquid-glass p-4 rounded-xl border border-white/5">
+                              <div key={pred.id || `${pred.uid}_${pred.fixtureId}`} className={`liquid-glass p-4 rounded-xl border ${isGold ? "card-gold" : "border-white/5"}`}>
                                 <div className="flex justify-between items-start">
                                   <div>
                                     <p className="text-xs font-semibold text-white">
@@ -2307,6 +2469,37 @@ export default function App() {
               <button className="btn-primary flex-1 py-3 rounded-full text-xs uppercase tracking-widest font-bold" onClick={handleSaveFixtureEdit}>Save Changes</button>
               <button className="btn-secondary px-6 py-3 rounded-full text-xs font-semibold" onClick={() => setEditFixture(null)}>Cancel</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showTeamPicker && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4" onTouchStart={handlePickerTouchStart} onTouchEnd={handlePickerTouchEnd}>
+          <div className="w-full max-w-lg text-center">
+            <h2 className="font-heading italic text-3xl uppercase tracking-tight text-white mb-2">Choose Your Team</h2>
+            <p className="text-xs text-white/50 mb-8">Pick the team you'll be supporting this World Cup</p>
+            <div className="relative w-full" style={{ height: "min(48vh, 420px)" }}>
+              {TEAMS.map((t, i) => (
+                <div key={t.name} className="absolute" style={getPickerRoleStyle(i, pickerTeamIndex)}>
+                  <img src={t.jersey} alt={t.name} className="w-full h-auto drop-shadow-2xl" onError={(e) => { e.target.src = JERSEY_PLACEHOLDER; }} />
+                </div>
+              ))}
+              <button className="hidden sm:flex absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 backdrop-blur-sm border border-white/15 items-center justify-center text-white hover:bg-white/20 transition-all z-30" onClick={() => navigatePicker("prev")}>&#8249;</button>
+              <button className="hidden sm:flex absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 backdrop-blur-sm border border-white/15 items-center justify-center text-white hover:bg-white/20 transition-all z-30" onClick={() => navigatePicker("next")}>&#8250;</button>
+            </div>
+            <div className="mt-4">
+              <span className="text-3xl">{fl(TEAMS[pickerTeamIndex]?.name)}</span>
+              <p className="text-sm font-semibold text-white mt-1">{TEAMS[pickerTeamIndex]?.name}</p>
+              <p className="text-[10px] text-white/40 uppercase tracking-wider mt-0.5">Group {TEAMS[pickerTeamIndex]?.group}</p>
+            </div>
+            <div className="flex gap-4 justify-center mt-8">
+              <button className="btn-primary px-10 py-3 rounded-full text-sm uppercase tracking-widest font-bold" onClick={() => handlePickTeam(TEAMS[pickerTeamIndex]?.name)}>
+                Choose {TEAMS[pickerTeamIndex]?.name}
+              </button>
+            </div>
+            <p className="text-xs text-white/30 mt-4 cursor-pointer hover:text-white/60 transition-colors inline-block" onClick={() => handlePickTeam(null)}>
+              I'd rather not prefer
+            </p>
           </div>
         </div>
       )}

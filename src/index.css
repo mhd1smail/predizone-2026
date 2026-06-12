@@ -526,3 +526,9 @@ body {
   animation: firecracker-burst 0.8s ease-out infinite;
 }
 
+.card-gold {
+  background: linear-gradient(135deg, rgba(255,215,0,0.12), rgba(255,200,0,0.06)) !important;
+  border-color: rgba(255,215,0,0.3) !important;
+  box-shadow: 0 0 24px rgba(255,215,0,0.15), inset 0 0 12px rgba(255,215,0,0.05);
+}
+
