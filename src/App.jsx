@@ -676,7 +676,7 @@ export default function App() {
     if (!currentUser || !isStreamTab) return;
 
     setComments([]);
-    const channel = supabase.channel("stream-viewers");
+    const channel = supabase.channel("stream-viewers", { broadcast: { selfBroadcast: true } });
 
     channel.on("presence", { event: "sync" }, () => {
       setViewerCount(Object.keys(channel.presenceState()).length);
@@ -753,10 +753,11 @@ export default function App() {
       return;
     }
     try {
+      const reportedUser = Object.values(users).find(u => u.id === comment.user_id);
       await addChatReport(
         comment.user_id,
         comment.name,
-        currentUser.email || "",
+        reportedUser?.email || "",
         currentUser.id,
         comment.text
       );
@@ -1762,9 +1763,9 @@ export default function App() {
                   {/* ─── USER: Live Stream ─── */}
                   {userTab === "stream" && !isAdmin && (() => {
                     const now = new Date();
-                    const nextMatch = sortedFixtures.find(f => new Date(f.date).getTime() + 9600000 > now.getTime());
+                    const nextMatch = sortedFixtures.find(f => new Date(f.date).getTime() + 9000000 > now.getTime());
                     const streamStart = nextMatch ? new Date(new Date(nextMatch.date).getTime() - 600000) : null;
-                    const streamEnd = nextMatch ? new Date(new Date(nextMatch.date).getTime() + 9600000) : null;
+                    const streamEnd = nextMatch ? new Date(new Date(nextMatch.date).getTime() + 9000000) : null;
                     const isStreaming = streamStart && streamEnd && now >= streamStart && now <= streamEnd;
                     const isBefore = streamStart && now < streamStart;
                     const isAfter = streamEnd && now > streamEnd;
