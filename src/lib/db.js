@@ -306,6 +306,42 @@ export function onFixtureOverrides(callback) {
   return () => supabase.removeChannel(channel);
 }
 
+export async function getStreamLinks() {
+  const { data, error } = await supabase
+    .from("settings")
+    .select("*")
+    .eq("id", "stream_links")
+    .maybeSingle();
+  if (error && error.code !== "PGRST116") throw error;
+  return data?.links || null;
+}
+
+export async function saveStreamLinks(links) {
+  const { data, error } = await supabase
+    .from("settings")
+    .upsert({ id: "stream_links", links, updated_at: new Date().toISOString() })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export function onStreamLinks(callback) {
+  const channel = supabase
+    .channel("stream-links")
+    .on("postgres_changes",
+      { event: "*", schema: "public", table: "settings", filter: "id=eq.stream_links" },
+      (payload) => callback(payload.new?.links || null)
+    )
+    .subscribe();
+  const initialFetch = async () => {
+    const { data } = await supabase.from("settings").select("*").eq("id", "stream_links").single();
+    callback(data?.links || null);
+  };
+  initialFetch();
+  return () => supabase.removeChannel(channel);
+}
+
 export async function saveFixtureOverride(fixtureId, override) {
   const { data: existing } = await supabase
     .from("settings")

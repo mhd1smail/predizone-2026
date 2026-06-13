@@ -5,7 +5,7 @@ import { supabase } from "./lib/supabase";
 import { ArrowLeft, ArrowRight, ArrowUpRight, Play, Award, LogOut, CheckCircle, User, Zap, Mail, Target, Lock, Unlock, Eye, Trophy, Calendar, Volume2, VolumeX, Tv } from "lucide-react";
 import { useAuth } from "./context/AuthContext";
 import { signInWithGoogle, signOutUser } from "./lib/auth";
-import { createUserProfile, getUserProfile, onAllUsers, savePrediction, saveResult, deleteKnockoutMatch, saveKnockoutMatch, onAllPredictions, onAllResults, onKnockoutMatches, onArenaSettings, updateArenaSettings, onFixtureOverrides, saveFixtureOverride, onUndoStatus, setUndoPoint, undoLastFixtureEdit, updateUserProfile, onUserPredictions } from "./lib/db";
+import { createUserProfile, getUserProfile, onAllUsers, savePrediction, saveResult, deleteKnockoutMatch, saveKnockoutMatch, onAllPredictions, onAllResults, onKnockoutMatches, onArenaSettings, updateArenaSettings, onFixtureOverrides, saveFixtureOverride, onUndoStatus, setUndoPoint, undoLastFixtureEdit, updateUserProfile, onUserPredictions, getStreamLinks, saveStreamLinks, onStreamLinks } from "./lib/db";
 
 const FIXTURES = [
   // Group A
@@ -375,6 +375,14 @@ function normaliseDept(dept) {
   return dept.trim().replace(/\s+/g, " ");
 }
 
+function normaliseSlug(name) {
+  return name
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
 if (typeof window !== "undefined") {
   const originalError = console.error;
   console.error = (...args) => {
@@ -431,16 +439,57 @@ function BlurText({ text, className }) {
   );
 }
 
+function Countdown({ target, label }) {
+  const [remaining, setRemaining] = useState("");
+  useEffect(() => {
+    function tick() {
+      const diff = target.getTime() - Date.now();
+      if (diff <= 0) { setRemaining("Starting..."); return; }
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setRemaining(`${h}h ${m}m ${s}s`);
+    }
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [target]);
+  return (
+    <div>
+      <p className="text-[9px] text-white/40 uppercase tracking-wider mb-1">{label}</p>
+      <p className="text-xl font-bold text-white/90 font-mono">{remaining}</p>
+    </div>
+  );
+}
+
+const DEFAULT_STREAM_LINKS = {
+  server1: "https://embed.st/embed/admin/ppv-{home}-vs-{away}/",
+  server2: "https://embed.st/embed/delta/live_world-championship-gr-b_{home}-vs-{away}-live-streaming-1243362393/",
+  server3: "https://embed.st/embed/echo/{home}-vs-{away}-german-spanish-game-2026/",
+  server4: "https://embed.st/embed/golf/23094/",
+};
+
 const STREAM_SERVERS = [
-  { label: "ECHO · Stream 1 · HD", url: "/embed/echo/qatar-vs-switzerland-german-spanish-game-2026/1" },
-  { label: "ECHO · Stream 2 · HD", url: "/embed/echo/qatar-vs-switzerland-german-spanish-game-2026/2" },
-  { label: "ECHO · Stream 3 · HD", url: "/embed/echo/qatar-vs-switzerland-german-spanish-game-2026/3" },
-  { label: "ECHO · Stream 4 · HD", url: "/embed/echo/qatar-vs-switzerland-german-spanish-game-2026/4" },
-  { label: "ADMIN · English · ITV1 · HD", url: "/embed/admin/english-itv1-hd/qatar-vs-switzerland/1" },
-  { label: "ADMIN · English · FOX · HD", url: "/embed/admin/english-fox-hd/qatar-vs-switzerland/1" },
-  { label: "ADMIN · Spanish · Telemundo · HD", url: "/embed/admin/spanish-telemundo-hd/qatar-vs-switzerland/1" },
-  { label: "DELTA · English · HD", url: "/embed/delta/qatar-vs-switzerland-german-spanish-game-2026/1" },
-  { label: "GOLF · English · HD", url: "/embed/golf/qatar-vs-switzerland-german-spanish-game-2026/1" },
+  {
+    label: "Server 1",
+    base: "/embed/admin/ppv-qatar-vs-switzerland",
+    streams: 6,
+  },
+  {
+    label: "Server 2",
+    base: "/embed/delta/live_world-championship-gr-b_qatar-switzerland-live-streaming-1243362393",
+    streams: 3,
+  },
+  {
+    label: "Server 3",
+    base: "/embed/echo/qatar-vs-switzerland-german-spanish-game-2026",
+    streams: 4,
+  },
+  {
+    label: "Server 4",
+    base: "/embed/golf/23094",
+    streams: 2,
+  },
 ];
 
 export default function App() {
@@ -463,7 +512,11 @@ export default function App() {
   const [pullDistance, setPullDistance] = useState(0);
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [viewerCount, setViewerCount] = useState(0);
-  const [activeStreamUrl, setActiveStreamUrl] = useState(STREAM_SERVERS[0].url);
+  const [viewerList, setViewerList] = useState([]);
+  const [adminStreamInputs, setAdminStreamInputs] = useState({ server1: "", server2: "", server3: "", server4: "" });
+  const [activeServerIdx, setActiveServerIdx] = useState(0);
+  const [activeStreamIdx, setActiveStreamIdx] = useState(1);
+  const [streamLinks, setStreamLinks] = useState(null);
   const slideDir = useRef(0);
   const scrollContainerRef = useRef(null);
   const swipeContainerRef = useRef(null);
@@ -620,16 +673,30 @@ export default function App() {
 
     channel.on("presence", { event: "sync" }, () => {
       setViewerCount(Object.keys(channel.presenceState()).length);
+      setViewerList(Object.values(channel.presenceState()).flatMap(p => p || []));
     });
 
     channel.subscribe(async (status) => {
       if (status === "SUBSCRIBED") {
-        await channel.track({ user_id: currentUser.id });
+        await channel.track({ user_id: currentUser.id, name: currentUser.name, email: currentUser.email });
       }
     });
 
     return () => { channel.unsubscribe(); };
   }, [currentUser?.id, userTab, adminTab]);
+
+  useEffect(() => {
+    const unsub = onStreamLinks((links) => {
+      setStreamLinks(links);
+      setAdminStreamInputs({
+        server1: links?.server1 || DEFAULT_STREAM_LINKS.server1,
+        server2: links?.server2 || DEFAULT_STREAM_LINKS.server2,
+        server3: links?.server3 || DEFAULT_STREAM_LINKS.server3,
+        server4: links?.server4 || DEFAULT_STREAM_LINKS.server4,
+      });
+    });
+    return () => unsub();
+  }, []);
 
   const handleRefresh = () => {
     setPullDistance(0);
@@ -644,6 +711,7 @@ export default function App() {
     pullTouch.current.startY = t.clientY;
     pullTouch.current.pulling = true;
     pullTouch.current.swiping = false;
+    if (isAdmin) pullTouch.current.pulling = false;
   };
 
   const handleTouchMove = (e) => {
@@ -1609,70 +1677,124 @@ export default function App() {
 
                   {/* ─── USER: Live Stream ─── */}
                   {userTab === "stream" && !isAdmin && (() => {
-                    const streamFix = { id: 8, group: "B", home: "Qatar", away: "Switzerland" };
-                    const streamStats = getFixturePredictionStats(streamFix.id, predictions, streamFix.home, streamFix.away);
+                    const now = new Date();
+                    const nextMatch = sortedFixtures.find(f => new Date(f.date).getTime() + 6600000 > now.getTime());
+                    const streamStart = nextMatch ? new Date(new Date(nextMatch.date).getTime() - 600000) : null;
+                    const streamEnd = nextMatch ? new Date(new Date(nextMatch.date).getTime() + 6600000) : null;
+                    const isStreaming = streamStart && streamEnd && now >= streamStart && now <= streamEnd;
+                    const isBefore = streamStart && now < streamStart;
+                    const isAfter = streamEnd && now > streamEnd;
+                    const hasMoreAfter = nextMatch && sortedFixtures.indexOf(nextMatch) < sortedFixtures.length - 1;
+                    const nextNextMatch = hasMoreAfter ? sortedFixtures[sortedFixtures.indexOf(nextMatch) + 1] : null;
+                    let placeholderLabel = "";
+                    let placeholderTarget = null;
+                    if (isBefore && nextMatch) { placeholderLabel = "Stream starts in"; placeholderTarget = streamStart; }
+                    else if (isAfter && nextNextMatch) { placeholderLabel = "Stream ended · Next stream in"; placeholderTarget = new Date(new Date(nextNextMatch.date).getTime() - 600000); }
+                    else if (isAfter && !nextNextMatch) { placeholderLabel = null; }
+                    else if (!nextMatch) { placeholderLabel = null; }
+
+                    const links = streamLinks || DEFAULT_STREAM_LINKS;
+                    const serverKeys = ["server1", "server2", "server3", "server4"];
+                    const slugs = nextMatch ? { home: normaliseSlug(nextMatch.home), away: normaliseSlug(nextMatch.away) } : { home: "", away: "" };
+                    const activeBaseUrl = links[serverKeys[activeServerIdx]] || "";
+                    const activeUrl = nextMatch
+                      ? `${activeBaseUrl.replace("{home}", slugs.home).replace("{away}", slugs.away)}${activeStreamIdx}`
+                      : "#";
                     return (
                       <div className="space-y-4">
-                        <div className="text-left mb-2 flex items-center gap-3">
+                        <div className="text-left flex items-center gap-3">
                           <h2 className="font-heading italic text-3xl uppercase tracking-tight text-white">LIVE STREAM</h2>
-                          {viewerCount > 0 && (
+                          {isStreaming && viewerCount > 0 && (
                             <span className="inline-flex items-center gap-1 text-[10px] text-green-400 font-semibold">
                               <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
                               {viewerCount} watching
                             </span>
                           )}
                         </div>
-                        {streamStats && streamStats.bars.length > 0 && (
-                          <div className="liquid-glass p-5 rounded-xl border border-white/5">
-                            <p className="text-[10px] text-white/40 uppercase tracking-wider text-center mb-1">Qatar vs Switzerland</p>
-                            <p className="text-[9px] text-white/30 uppercase tracking-wider text-center mb-3">Prediction Distribution</p>
-                            <div className="space-y-1.5">
-                              {streamStats.bars.map((bar, bi) => (
-                                <div key={`${bar.team}-${bi}`} className="flex items-center gap-2">
-                                  <span className="text-[8px] text-white/50 w-10 text-right leading-tight truncate shrink-0">{bar.team === "Qatar" ? "Qatar" : bar.team === "Switzerland" ? "Switzerland" : "Draw"}</span>
-                                  <div className="flex-1 h-4 rounded-full bg-white/5 overflow-hidden">
-                                    <div className="h-full rounded-full transition-all duration-500" style={{
-                                      width: `${bar.pct}%`,
-                                      background: bar.team === "Qatar" ? "#22c55e" : bar.team === "Switzerland" ? "#3b82f6" : "#ffffff",
-                                    }} />
+                        {nextMatch && (
+                          <div className="liquid-glass p-5 rounded-xl border border-white/5 text-center">
+                            <p className="text-[10px] text-white/40 uppercase tracking-wider mb-1">
+                              {nextMatch.home} vs {nextMatch.away}
+                            </p>
+                            {placeholderLabel && placeholderTarget ? (
+                              <Countdown target={placeholderTarget} label={placeholderLabel} />
+                            ) : isBefore ? null : isStreaming ? (
+                              <>
+                                {(() => {
+                                  const stats = getFixturePredictionStats(nextMatch.id, predictions, nextMatch.home, nextMatch.away);
+                                  if (!stats || stats.bars.length === 0) return null;
+                                  return (
+                                    <div className="mt-2">
+                                      <p className="text-[9px] text-white/30 uppercase tracking-wider mb-2">Prediction Distribution</p>
+                                      <div className="space-y-1.5">
+                                        {stats.bars.map((bar, bi) => (
+                                          <div key={`${bar.team}-${bi}`} className="flex items-center gap-2">
+                                            <span className="text-[8px] text-white/50 w-10 text-right leading-tight truncate shrink-0">{bar.team === nextMatch.home ? nextMatch.home : bar.team === nextMatch.away ? nextMatch.away : "Draw"}</span>
+                                            <div className="flex-1 h-4 rounded-full bg-white/5 overflow-hidden">
+                                              <div className="h-full rounded-full transition-all duration-500" style={{
+                                                width: `${bar.pct}%`,
+                                                background: bar.team === nextMatch.home ? "#22c55e" : bar.team === nextMatch.away ? "#3b82f6" : "#ffffff",
+                                              }} />
+                                            </div>
+                                            <span className="text-[9px] font-bold text-white/70 w-8 text-left shrink-0">{bar.pct}%</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
+                                <div className="mt-4 liquid-glass p-3 rounded-xl">
+                                  <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
+                                    <iframe
+                                      src={activeUrl}
+                                      className="absolute inset-0 w-full h-full rounded-lg"
+                                      allowFullScreen
+                                      allow="autoplay; encrypted-media; picture-in-picture"
+                                    />
                                   </div>
-                                  <span className="text-[9px] font-bold text-white/70 w-8 text-left shrink-0">{bar.pct}%</span>
                                 </div>
-                              ))}
-                            </div>
+                                <div className="space-y-2 mt-3">
+                                  <p className="text-[9px] text-white/40 uppercase tracking-wider">Servers</p>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {STREAM_SERVERS.map((srv, i) => (
+                                      <button
+                                        key={i}
+                                        onClick={() => { setActiveServerIdx(i); setActiveStreamIdx(1); }}
+                                        className={`text-[10px] px-3 py-1.5 rounded-lg font-semibold uppercase tracking-wider transition-all ${
+                                          activeServerIdx === i
+                                            ? "bg-white/20 text-white border border-white/20"
+                                            : "bg-white/[0.06] text-white/50 hover:bg-white/[0.10] hover:text-white/70 border border-white/[0.06]"
+                                        }`}
+                                      >
+                                        {srv.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {Array.from({ length: STREAM_SERVERS[activeServerIdx].streams }, (_, si) => (
+                                      <button
+                                        key={si}
+                                        onClick={() => setActiveStreamIdx(si + 1)}
+                                        className={`text-[10px] px-3 py-1.5 rounded-lg font-semibold transition-all ${
+                                          activeStreamIdx === si + 1
+                                            ? "bg-white text-black"
+                                            : "bg-white/[0.06] text-white/50 hover:bg-white/[0.10] hover:text-white/70 border border-white/[0.06]"
+                                        }`}
+                                      >
+                                        Link {si + 1}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                                <p className="text-[10px] text-amber-400/70 text-center mt-3 leading-relaxed">
+                                  If the live stream doesn't work properly, use a VPN (preferably 1.1.1.1)
+                                </p>
+                              </>
+                            ) : (
+                              <p className="text-[10px] text-white/40">No upcoming streams</p>
+                            )}
                           </div>
                         )}
-                        <div className="liquid-glass p-4 rounded-xl border border-white/5">
-                          <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
-                            <iframe
-                              src={`https://embed.st${activeStreamUrl}`}
-                              className="absolute inset-0 w-full h-full rounded-lg"
-                              allowFullScreen
-                              allow="autoplay; encrypted-media; picture-in-picture"
-                            />
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <p className="text-[9px] text-white/40 uppercase tracking-wider">Servers</p>
-                          <div className="flex flex-wrap gap-1.5">
-                            {STREAM_SERVERS.map((srv, i) => (
-                              <button
-                                key={i}
-                                onClick={() => setActiveStreamUrl(srv.url)}
-                                className={`text-[9px] px-2.5 py-1.5 rounded-lg font-semibold uppercase tracking-wider transition-all ${
-                                  activeStreamUrl === srv.url
-                                    ? "bg-white text-black"
-                                    : "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white/80 border border-white/5"
-                                }`}
-                              >
-                                {srv.label}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        <p className="text-[10px] text-amber-400/70 text-center leading-relaxed">
-                          If the live stream doesn't work properly, use a VPN (preferably 1.1.1.1)
-                        </p>
                       </div>
                     );
                   })()}
@@ -2242,74 +2364,56 @@ export default function App() {
                         </div>
                       )}
 
-                      {adminTab === "stream" && (() => {
-                        const streamFix = { id: 8, group: "B", home: "Qatar", away: "Switzerland" };
-                        const streamStats = getFixturePredictionStats(streamFix.id, predictions, streamFix.home, streamFix.away);
-                        return (
-                          <div className="space-y-4">
-                            <div className="text-left flex items-center gap-3">
-                              <h2 className="font-heading italic text-3xl uppercase tracking-tight text-white">LIVE STREAM</h2>
-                              {viewerCount > 0 && (
-                                <span className="inline-flex items-center gap-1 text-[10px] text-green-400 font-semibold">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                                  {viewerCount} watching
-                                </span>
-                              )}
-                            </div>
-                            {streamStats && streamStats.bars.length > 0 && (
-                              <div className="liquid-glass p-5 rounded-xl border border-white/5">
-                                <p className="text-[10px] text-white/40 uppercase tracking-wider text-center mb-1">Qatar vs Switzerland</p>
-                                <p className="text-[9px] text-white/30 uppercase tracking-wider text-center mb-3">Prediction Distribution</p>
-                                <div className="space-y-1.5">
-                                  {streamStats.bars.map((bar, bi) => (
-                                    <div key={`${bar.team}-${bi}`} className="flex items-center gap-2">
-                                      <span className="text-[8px] text-white/50 w-10 text-right leading-tight truncate shrink-0">{bar.team === "Qatar" ? "Qatar" : bar.team === "Switzerland" ? "Switzerland" : "Draw"}</span>
-                                      <div className="flex-1 h-4 rounded-full bg-white/5 overflow-hidden">
-                                        <div className="h-full rounded-full transition-all duration-500" style={{
-                                          width: `${bar.pct}%`,
-                                          background: bar.team === "Qatar" ? "#22c55e" : bar.team === "Switzerland" ? "#3b82f6" : "#ffffff",
-                                        }} />
-                                      </div>
-                                      <span className="text-[9px] font-bold text-white/70 w-8 text-left shrink-0">{bar.pct}%</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
+                      {adminTab === "stream" && (
+                        <div className="space-y-4">
+                          <div className="text-left flex items-center gap-3">
+                            <h2 className="font-heading italic text-3xl uppercase tracking-tight text-white">STREAM LINKS</h2>
+                            {viewerCount > 0 && (
+                              <span className="inline-flex items-center gap-1 text-[10px] text-green-400 font-semibold">
+                                <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                                {viewerCount} watching
+                              </span>
                             )}
-                            <div className="liquid-glass p-4 rounded-xl border border-white/5">
-                              <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
-                                <iframe
-                                  src={`https://embed.st${activeStreamUrl}`}
-                                  className="absolute inset-0 w-full h-full rounded-lg"
-                                  allowFullScreen
-                                  allow="autoplay; encrypted-media; picture-in-picture"
+                          </div>
+                          <div className="liquid-glass p-5 rounded-xl border border-white/5 space-y-3">
+                            {["server1", "server2", "server3", "server4"].map((key, i) => (
+                              <div key={key}>
+                                <label className="text-[9px] text-white/40 uppercase tracking-wider block mb-1">Server {i + 1}</label>
+                                <input
+                                  value={adminStreamInputs[key]}
+                                  onChange={(e) => setAdminStreamInputs(prev => ({ ...prev, [key]: e.target.value }))}
+                                  className="w-full bg-white/[0.06] border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-white/30 outline-none focus:border-white/30"
+                                  placeholder={`Server ${i + 1} URL`}
                                 />
                               </div>
-                            </div>
-                            <div className="space-y-2">
-                              <p className="text-[9px] text-white/40 uppercase tracking-wider">Servers</p>
-                              <div className="flex flex-wrap gap-1.5">
-                                {STREAM_SERVERS.map((srv, i) => (
-                                  <button
-                                    key={i}
-                                    onClick={() => setActiveStreamUrl(srv.url)}
-                                    className={`text-[9px] px-2.5 py-1.5 rounded-lg font-semibold uppercase tracking-wider transition-all ${
-                                      activeStreamUrl === srv.url
-                                        ? "bg-white text-black"
-                                        : "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white/80 border border-white/5"
-                                    }`}
-                                  >
-                                    {srv.label}
-                                  </button>
+                            ))}
+                            <button
+                              onClick={async () => {
+                                try {
+                                  await saveStreamLinks(adminStreamInputs);
+                                  showToast("Stream links updated!");
+                                } catch { showToast("Failed to save", "error"); }
+                              }}
+                              className="btn-primary w-full py-2.5 rounded-lg text-xs uppercase tracking-widest font-bold"
+                            >
+                              Update
+                            </button>
+                          </div>
+                          {viewerList.length > 0 && (
+                            <div className="liquid-glass p-4 rounded-xl border border-white/5">
+                              <p className="text-[9px] text-white/40 uppercase tracking-wider mb-3">Now Watching ({viewerCount})</p>
+                              <div className="space-y-2 max-h-40 overflow-y-auto">
+                                {viewerList.map((v, i) => (
+                                  <div key={i} className="flex items-center justify-between text-xs">
+                                    <span className="text-white/80 font-medium">{v.name || "Unknown"}</span>
+                                    <span className="text-white/40 text-[10px]">{v.email || ""}</span>
+                                  </div>
                                 ))}
                               </div>
                             </div>
-                            <p className="text-[10px] text-amber-400/70 text-center leading-relaxed">
-                              If the live stream doesn't work properly, use a VPN (preferably 1.1.1.1)
-                            </p>
-                          </div>
-                        );
-                      })()}
+                          )}
+                        </div>
+                      )}
 
                       {/* ADMIN: Leaderboard */}
                       {adminTab === "leaderboard" && (
