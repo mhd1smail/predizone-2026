@@ -1,6 +1,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect, useRef, useMemo } from "react";
 import { motion } from "framer-motion";
+import { supabase } from "./lib/supabase";
 import { ArrowLeft, ArrowRight, ArrowUpRight, Play, Award, LogOut, CheckCircle, User, Zap, Mail, Target, Lock, Unlock, Eye, Trophy, Calendar, Volume2, VolumeX, Tv } from "lucide-react";
 import { useAuth } from "./context/AuthContext";
 import { signInWithGoogle, signOutUser } from "./lib/auth";
@@ -430,6 +431,18 @@ function BlurText({ text, className }) {
   );
 }
 
+const STREAM_SERVERS = [
+  { label: "ECHO · Stream 1 · HD", url: "/embed/echo/qatar-vs-switzerland-german-spanish-game-2026/1" },
+  { label: "ECHO · Stream 2 · HD", url: "/embed/echo/qatar-vs-switzerland-german-spanish-game-2026/2" },
+  { label: "ECHO · Stream 3 · HD", url: "/embed/echo/qatar-vs-switzerland-german-spanish-game-2026/3" },
+  { label: "ECHO · Stream 4 · HD", url: "/embed/echo/qatar-vs-switzerland-german-spanish-game-2026/4" },
+  { label: "ADMIN · English · ITV1 · HD", url: "/embed/admin/english-itv1-hd/qatar-vs-switzerland/1" },
+  { label: "ADMIN · English · FOX · HD", url: "/embed/admin/english-fox-hd/qatar-vs-switzerland/1" },
+  { label: "ADMIN · Spanish · Telemundo · HD", url: "/embed/admin/spanish-telemundo-hd/qatar-vs-switzerland/1" },
+  { label: "DELTA · English · HD", url: "/embed/delta/qatar-vs-switzerland-german-spanish-game-2026/1" },
+  { label: "GOLF · English · HD", url: "/embed/golf/qatar-vs-switzerland-german-spanish-game-2026/1" },
+];
+
 export default function App() {
   const { currentUser, isAdmin, loading: authLoading, setCurrentUser, pendingAuthUser } = useAuth();
   const [page, setPage] = useState("splash");
@@ -449,6 +462,8 @@ export default function App() {
   const pullTouch = useRef({ startX: 0, startY: 0, pulling: false, swiping: false });
   const [pullDistance, setPullDistance] = useState(0);
   const [swipeOffset, setSwipeOffset] = useState(0);
+  const [viewerCount, setViewerCount] = useState(0);
+  const [activeStreamUrl, setActiveStreamUrl] = useState(STREAM_SERVERS[0].url);
   const slideDir = useRef(0);
   const scrollContainerRef = useRef(null);
   const swipeContainerRef = useRef(null);
@@ -596,6 +611,25 @@ export default function App() {
     const active = el.querySelector(".bg-white.text-black");
     if (active) active.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
   }, [userTab, adminTab]);
+
+  useEffect(() => {
+    const isStreamTab = userTab === "stream" || adminTab === "stream";
+    if (!currentUser || !isStreamTab) return;
+
+    const channel = supabase.channel("stream-viewers");
+
+    channel.on("presence", { event: "sync" }, () => {
+      setViewerCount(Object.keys(channel.presenceState()).length);
+    });
+
+    channel.subscribe(async (status) => {
+      if (status === "SUBSCRIBED") {
+        await channel.track({ user_id: currentUser.id });
+      }
+    });
+
+    return () => { channel.unsubscribe(); };
+  }, [currentUser?.id, userTab, adminTab]);
 
   const handleRefresh = () => {
     setPullDistance(0);
@@ -1579,8 +1613,14 @@ export default function App() {
                     const streamStats = getFixturePredictionStats(streamFix.id, predictions, streamFix.home, streamFix.away);
                     return (
                       <div className="space-y-4">
-                        <div className="text-left mb-2">
+                        <div className="text-left mb-2 flex items-center gap-3">
                           <h2 className="font-heading italic text-3xl uppercase tracking-tight text-white">LIVE STREAM</h2>
+                          {viewerCount > 0 && (
+                            <span className="inline-flex items-center gap-1 text-[10px] text-green-400 font-semibold">
+                              <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                              {viewerCount} watching
+                            </span>
+                          )}
                         </div>
                         {streamStats && streamStats.bars.length > 0 && (
                           <div className="liquid-glass p-5 rounded-xl border border-white/5">
@@ -1605,11 +1645,29 @@ export default function App() {
                         <div className="liquid-glass p-4 rounded-xl border border-white/5">
                           <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
                             <iframe
-                              src="https://embed.st/embed/echo/qatar-vs-switzerland-german-spanish-game-2026/1"
+                              src={`https://embed.st${activeStreamUrl}`}
                               className="absolute inset-0 w-full h-full rounded-lg"
                               allowFullScreen
-                              allow="autoplay; encrypted-media"
+                              allow="autoplay; encrypted-media; picture-in-picture"
                             />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-[9px] text-white/40 uppercase tracking-wider">Servers</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {STREAM_SERVERS.map((srv, i) => (
+                              <button
+                                key={i}
+                                onClick={() => setActiveStreamUrl(srv.url)}
+                                className={`text-[9px] px-2.5 py-1.5 rounded-lg font-semibold uppercase tracking-wider transition-all ${
+                                  activeStreamUrl === srv.url
+                                    ? "bg-white text-black"
+                                    : "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white/80 border border-white/5"
+                                }`}
+                              >
+                                {srv.label}
+                              </button>
+                            ))}
                           </div>
                         </div>
                         <p className="text-[10px] text-amber-400/70 text-center leading-relaxed">
@@ -2189,8 +2247,14 @@ export default function App() {
                         const streamStats = getFixturePredictionStats(streamFix.id, predictions, streamFix.home, streamFix.away);
                         return (
                           <div className="space-y-4">
-                            <div className="text-left">
+                            <div className="text-left flex items-center gap-3">
                               <h2 className="font-heading italic text-3xl uppercase tracking-tight text-white">LIVE STREAM</h2>
+                              {viewerCount > 0 && (
+                                <span className="inline-flex items-center gap-1 text-[10px] text-green-400 font-semibold">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                                  {viewerCount} watching
+                                </span>
+                              )}
                             </div>
                             {streamStats && streamStats.bars.length > 0 && (
                               <div className="liquid-glass p-5 rounded-xl border border-white/5">
@@ -2215,11 +2279,29 @@ export default function App() {
                             <div className="liquid-glass p-4 rounded-xl border border-white/5">
                               <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
                                 <iframe
-                                  src="https://embed.st/embed/echo/qatar-vs-switzerland-german-spanish-game-2026/1"
+                                  src={`https://embed.st${activeStreamUrl}`}
                                   className="absolute inset-0 w-full h-full rounded-lg"
                                   allowFullScreen
-                                  allow="autoplay; encrypted-media"
+                                  allow="autoplay; encrypted-media; picture-in-picture"
                                 />
+                              </div>
+                            </div>
+                            <div className="space-y-2">
+                              <p className="text-[9px] text-white/40 uppercase tracking-wider">Servers</p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {STREAM_SERVERS.map((srv, i) => (
+                                  <button
+                                    key={i}
+                                    onClick={() => setActiveStreamUrl(srv.url)}
+                                    className={`text-[9px] px-2.5 py-1.5 rounded-lg font-semibold uppercase tracking-wider transition-all ${
+                                      activeStreamUrl === srv.url
+                                        ? "bg-white text-black"
+                                        : "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white/80 border border-white/5"
+                                    }`}
+                                  >
+                                    {srv.label}
+                                  </button>
+                                ))}
                               </div>
                             </div>
                             <p className="text-[10px] text-amber-400/70 text-center leading-relaxed">
