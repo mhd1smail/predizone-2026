@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, ArrowUpRight, Play, Award, LogOut, CheckCircle, User, Zap, Mail, Target, Lock, Unlock, Eye, Trophy, Calendar, Volume2, VolumeX, Tv } from "lucide-react";
 import { useAuth } from "./context/AuthContext";
 import { signInWithGoogle, signOutUser } from "./lib/auth";
-import { createUserProfile, getUserProfile, onAllUsers, savePrediction, saveResult, deleteKnockoutMatch, saveKnockoutMatch, onAllPredictions, onAllResults, onKnockoutMatches, onArenaSettings, updateArenaSettings, onFixtureOverrides, saveFixtureOverride, onUndoStatus, setUndoPoint, undoLastFixtureEdit, updateUserProfile, submitStreamResponse, onStreamResponses, clearStreamPoll, onUserPredictions } from "./lib/db";
+import { createUserProfile, getUserProfile, onAllUsers, savePrediction, saveResult, deleteKnockoutMatch, saveKnockoutMatch, onAllPredictions, onAllResults, onKnockoutMatches, onArenaSettings, updateArenaSettings, onFixtureOverrides, saveFixtureOverride, onUndoStatus, setUndoPoint, undoLastFixtureEdit, updateUserProfile, onUserPredictions } from "./lib/db";
 
 const FIXTURES = [
   // Group A
@@ -472,7 +472,6 @@ export default function App() {
   const [editingMatch, setEditingMatch] = useState(null);
   const [fixtureOverrides, setFixtureOverrides] = useState({});
   const [undoInfo, setUndoInfo] = useState(null);
-  const [streamResponses, setStreamResponses] = useState({});
   const [editFixture, setEditFixture] = useState(null);
   const [editFixtureHome, setEditFixtureHome] = useState("");
   const [editFixtureAway, setEditFixtureAway] = useState("");
@@ -573,11 +572,6 @@ export default function App() {
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, [page]);
-
-  useEffect(() => {
-    const unsubStream = onStreamResponses((r) => setStreamResponses(r));
-    return () => unsubStream();
-  }, []);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -1579,48 +1573,48 @@ export default function App() {
                     );
                   })()}
 
-                  {/* ─── USER: Stream Poll ─── */}
+                  {/* ─── USER: Live Stream ─── */}
                   {userTab === "stream" && !isAdmin && (() => {
-                    const myResponse = currentUser ? streamResponses[currentUser.id] : null;
-                    const yesCount = Object.values(streamResponses).filter(r => r.response === "yes").length;
-                    const noCount = Object.values(streamResponses).filter(r => r.response === "no").length;
-                    const total = yesCount + noCount;
+                    const streamFix = { id: 8, group: "B", home: "Qatar", away: "Switzerland" };
+                    const streamStats = getFixturePredictionStats(streamFix.id, predictions, streamFix.home, streamFix.away);
                     return (
                       <div className="space-y-4">
-                        <div className="text-left mb-6">
+                        <div className="text-left mb-2">
                           <h2 className="font-heading italic text-3xl uppercase tracking-tight text-white">LIVE STREAM</h2>
-                          <p className="text-xs text-white/50 mt-1 uppercase tracking-wider">Would you like live streaming of matches here?</p>
                         </div>
-                        <div className="liquid-glass p-6 rounded-xl border border-white/5 text-center">
-                          {currentUser && !myResponse ? (
-                            <>
-                              <h3 className="font-heading italic text-xl text-white mb-6">Would you like live streaming of World Cup matches here?</h3>
-                              <div className="flex gap-4 justify-center">
-                                <button className="btn-primary px-8 py-3 rounded-full text-sm uppercase tracking-widest font-bold bg-green-600 hover:bg-green-500" onClick={async () => { try { await submitStreamResponse(currentUser.id, "yes"); setStreamResponses(prev => ({ ...prev, [currentUser.id]: { user_id: currentUser.id, response: "yes", submitted_at: new Date().toISOString() } })); } catch (e) { showToast("Failed to submit vote", "error"); } }}>
-                                  Yes
-                                </button>
-                                <button className="btn-primary px-8 py-3 rounded-full text-sm uppercase tracking-widest font-bold bg-red-600 hover:bg-red-500" onClick={async () => { try { await submitStreamResponse(currentUser.id, "no"); setStreamResponses(prev => ({ ...prev, [currentUser.id]: { user_id: currentUser.id, response: "no", submitted_at: new Date().toISOString() } })); } catch (e) { showToast("Failed to submit vote", "error"); } }}>
-                                  No
-                                </button>
-                              </div>
-                            </>
-                          ) : (
-                            <div>
-                              <h3 className="font-heading italic text-lg text-white mb-2">You voted: <span className={myResponse?.response === "yes" ? "text-green-400" : "text-red-400"}>{myResponse?.response === "yes" ? "Yes" : "No"}</span></h3>
-                              {total > 0 && (
-                                <div className="w-full bg-white/10 rounded-full h-4 mt-4 overflow-hidden flex">
-                                  <div className="bg-green-500 h-full transition-all" style={{ width: `${(yesCount / total) * 100}%` }} />
-                                  <div className="bg-red-500 h-full transition-all" style={{ width: `${(noCount / total) * 100}%` }} />
+                        {streamStats && streamStats.bars.length > 0 && (
+                          <div className="liquid-glass p-5 rounded-xl border border-white/5">
+                            <p className="text-[10px] text-white/40 uppercase tracking-wider text-center mb-1">Qatar vs Switzerland</p>
+                            <p className="text-[9px] text-white/30 uppercase tracking-wider text-center mb-3">Prediction Distribution</p>
+                            <div className="space-y-1.5">
+                              {streamStats.bars.map((bar, bi) => (
+                                <div key={`${bar.team}-${bi}`} className="flex items-center gap-2">
+                                  <span className="text-[8px] text-white/50 w-10 text-right leading-tight truncate shrink-0">{bar.team === "Qatar" ? "Qatar" : bar.team === "Switzerland" ? "Switzerland" : "Draw"}</span>
+                                  <div className="flex-1 h-4 rounded-full bg-white/5 overflow-hidden">
+                                    <div className="h-full rounded-full transition-all duration-500" style={{
+                                      width: `${bar.pct}%`,
+                                      background: bar.team === "Qatar" ? "#22c55e" : bar.team === "Switzerland" ? "#3b82f6" : "#ffffff",
+                                    }} />
+                                  </div>
+                                  <span className="text-[9px] font-bold text-white/70 w-8 text-left shrink-0">{bar.pct}%</span>
                                 </div>
-                              )}
-                              <div className="flex justify-center gap-8 mt-4 text-sm">
-                                <span className="text-green-400 font-semibold">{yesCount} Yes ({total > 0 ? Math.round((yesCount / total) * 100) : 0}%)</span>
-                                <span className="text-red-400 font-semibold">{noCount} No ({total > 0 ? Math.round((noCount / total) * 100) : 0}%)</span>
-                              </div>
+                              ))}
                             </div>
-                          )}
+                          </div>
+                        )}
+                        <div className="liquid-glass p-4 rounded-xl border border-white/5">
+                          <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
+                            <iframe
+                              src="https://embed.st/embed/echo/qatar-vs-switzerland-german-spanish-game-2026/1"
+                              className="absolute inset-0 w-full h-full rounded-lg"
+                              allowFullScreen
+                              allow="autoplay; encrypted-media"
+                            />
+                          </div>
                         </div>
-                        <p className="text-[9px] text-white/30 text-center">One vote per person. Results will reset after 12 hours.</p>
+                        <p className="text-[10px] text-amber-400/70 text-center leading-relaxed">
+                          If the live stream doesn't work properly, use a VPN (preferably 1.1.1.1)
+                        </p>
                       </div>
                     );
                   })()}
@@ -2190,44 +2184,50 @@ export default function App() {
                         </div>
                       )}
 
-                      {adminTab === "stream" && (
-                        <div className="space-y-4">
-                          <div className="text-left">
-                            <h3 className="font-heading italic text-xl uppercase tracking-tight text-white mb-2">Stream Poll</h3>
-                            <p className="text-xs text-white/50">Would you like live streaming of matches here?</p>
-                          </div>
-                          {(() => {
-                            const yesCount = Object.values(streamResponses).filter(r => r.response === "yes").length;
-                            const noCount = Object.values(streamResponses).filter(r => r.response === "no").length;
-                            const total = yesCount + noCount;
-                            return (
-                              <div className="grid grid-cols-3 gap-3">
-                                <div className="liquid-glass p-4 rounded-xl border border-white/5 text-center">
-                                  <p className="text-2xl font-bold text-white">{total}</p>
-                                  <p className="text-[9px] text-white/50 uppercase tracking-widest mt-1">Total Votes</p>
-                                </div>
-                                <div className="liquid-glass p-4 rounded-xl border border-white/5 text-center">
-                                  <p className="text-2xl font-bold text-green-400">{yesCount}</p>
-                                  <p className="text-[9px] text-white/50 uppercase tracking-widest mt-1">Yes</p>
-                                </div>
-                                <div className="liquid-glass p-4 rounded-xl border border-white/5 text-center">
-                                  <p className="text-2xl font-bold text-red-400">{noCount}</p>
-                                  <p className="text-[9px] text-white/50 uppercase tracking-widest mt-1">No</p>
+                      {adminTab === "stream" && (() => {
+                        const streamFix = { id: 8, group: "B", home: "Qatar", away: "Switzerland" };
+                        const streamStats = getFixturePredictionStats(streamFix.id, predictions, streamFix.home, streamFix.away);
+                        return (
+                          <div className="space-y-4">
+                            <div className="text-left">
+                              <h2 className="font-heading italic text-3xl uppercase tracking-tight text-white">LIVE STREAM</h2>
+                            </div>
+                            {streamStats && streamStats.bars.length > 0 && (
+                              <div className="liquid-glass p-5 rounded-xl border border-white/5">
+                                <p className="text-[10px] text-white/40 uppercase tracking-wider text-center mb-1">Qatar vs Switzerland</p>
+                                <p className="text-[9px] text-white/30 uppercase tracking-wider text-center mb-3">Prediction Distribution</p>
+                                <div className="space-y-1.5">
+                                  {streamStats.bars.map((bar, bi) => (
+                                    <div key={`${bar.team}-${bi}`} className="flex items-center gap-2">
+                                      <span className="text-[8px] text-white/50 w-10 text-right leading-tight truncate shrink-0">{bar.team === "Qatar" ? "Qatar" : bar.team === "Switzerland" ? "Switzerland" : "Draw"}</span>
+                                      <div className="flex-1 h-4 rounded-full bg-white/5 overflow-hidden">
+                                        <div className="h-full rounded-full transition-all duration-500" style={{
+                                          width: `${bar.pct}%`,
+                                          background: bar.team === "Qatar" ? "#22c55e" : bar.team === "Switzerland" ? "#3b82f6" : "#ffffff",
+                                        }} />
+                                      </div>
+                                      <span className="text-[9px] font-bold text-white/70 w-8 text-left shrink-0">{bar.pct}%</span>
+                                    </div>
+                                  ))}
                                 </div>
                               </div>
-                            );
-                          })()}
-                          {Object.values(streamResponses).filter(r => r.response === "yes" || r.response === "no").length > 0 && (
-                            <div className="w-full bg-white/10 rounded-full h-4 overflow-hidden flex">
-                              <div className="bg-green-500 h-full transition-all" style={{ width: `${(Object.values(streamResponses).filter(r => r.response === "yes").length / Math.max(Object.values(streamResponses).filter(r => r.response === "yes" || r.response === "no").length, 1)) * 100}%` }} />
-                              <div className="bg-red-500 h-full transition-all" style={{ width: `${(Object.values(streamResponses).filter(r => r.response === "no").length / Math.max(Object.values(streamResponses).filter(r => r.response === "yes" || r.response === "no").length, 1)) * 100}%` }} />
+                            )}
+                            <div className="liquid-glass p-4 rounded-xl border border-white/5">
+                              <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
+                                <iframe
+                                  src="https://embed.st/embed/echo/qatar-vs-switzerland-german-spanish-game-2026/1"
+                                  className="absolute inset-0 w-full h-full rounded-lg"
+                                  allowFullScreen
+                                  allow="autoplay; encrypted-media"
+                                />
+                              </div>
                             </div>
-                          )}
-                          <button className="btn-secondary px-4 py-2 rounded-lg text-xs font-semibold border-red-500/30 text-red-400 hover:bg-red-500/10" onClick={async () => { await clearStreamPoll(); setStreamResponses({}); }}>
-                            Clear All Responses
-                          </button>
-                        </div>
-                      )}
+                            <p className="text-[10px] text-amber-400/70 text-center leading-relaxed">
+                              If the live stream doesn't work properly, use a VPN (preferably 1.1.1.1)
+                            </p>
+                          </div>
+                        );
+                      })()}
 
                       {/* ADMIN: Leaderboard */}
                       {adminTab === "leaderboard" && (
