@@ -452,6 +452,58 @@ export async function clearStreamPoll() {
   if (error) throw error;
 }
 
+export async function addChatReport(reportedUserId, reportedUserName, reportedUserEmail, reporterUserId, commentText) {
+  const { error } = await supabase
+    .from("chat_reports")
+    .insert({
+      reported_user_id: reportedUserId,
+      reported_user_name: reportedUserName,
+      reported_user_email: reportedUserEmail,
+      reporter_user_id: reporterUserId,
+      comment_text: commentText,
+    });
+  if (error) throw error;
+}
+
+export async function getBlockedChatUsers() {
+  const { data, error } = await supabase
+    .from("chat_reports")
+    .select("*")
+    .limit(1000000);
+  if (error) throw error;
+  const counts = {};
+  (data || []).forEach(r => {
+    counts[r.reported_user_id] = counts[r.reported_user_id] || { count: 0, name: r.reported_user_name, email: r.reported_user_email || "" };
+    counts[r.reported_user_id].count++;
+  });
+  return Object.entries(counts)
+    .filter(([_, v]) => v.count >= 5)
+    .map(([id, v]) => ({ reported_user_id: id, reported_user_name: v.name, reported_user_email: v.email, report_count: v.count }));
+}
+
+export async function unblockChatUser(userId) {
+  const { error } = await supabase
+    .from("chat_reports")
+    .delete()
+    .eq("reported_user_id", userId);
+  if (error) throw error;
+}
+
+export function onBlockedChatUsers(callback) {
+  const channel = supabase
+    .channel("chat-reports-monitor")
+    .on("postgres_changes",
+      { event: "*", schema: "public", table: "chat_reports" },
+      async () => {
+        const blocked = await getBlockedChatUsers();
+        callback(blocked);
+      }
+    )
+    .subscribe();
+  getBlockedChatUsers().then(callback);
+  return () => supabase.removeChannel(channel);
+}
+
 function mapProfile(data) {
   if (!data) return null;
   return {

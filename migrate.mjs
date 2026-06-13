@@ -29,6 +29,20 @@ const firebaseConfig = {
 const fbApp = initializeApp(firebaseConfig, "migrate");
 const fbDb = getFirestore(fbApp);
 
+// ── Supabase tables ──────────────────────────────────────────────
+// IMPORTANT: Run this SQL in Supabase Dashboard SQL Editor before using chat:
+/*
+CREATE TABLE IF NOT EXISTS chat_reports (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  reported_user_id TEXT NOT NULL,
+  reported_user_name TEXT NOT NULL,
+  reported_user_email TEXT NOT NULL DEFAULT '',
+  reporter_user_id TEXT NOT NULL,
+  comment_text TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+*/
+
 // ── Supabase setup ───────────────────────────────────────────────
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "";

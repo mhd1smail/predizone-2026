@@ -2,10 +2,10 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { motion } from "framer-motion";
 import { supabase } from "./lib/supabase";
-import { ArrowLeft, ArrowRight, ArrowUpRight, Play, Award, LogOut, CheckCircle, User, Zap, Mail, Target, Lock, Unlock, Eye, Trophy, Calendar, Volume2, VolumeX, Tv } from "lucide-react";
+import { ArrowLeft, ArrowRight, ArrowUpRight, Play, Award, LogOut, CheckCircle, User, Zap, Mail, Target, Lock, Unlock, Eye, Trophy, Calendar, Volume2, VolumeX, Tv, Shield, Send, Flag, Ban, AlertTriangle } from "lucide-react";
 import { useAuth } from "./context/AuthContext";
 import { signInWithGoogle, signOutUser } from "./lib/auth";
-import { createUserProfile, getUserProfile, onAllUsers, savePrediction, saveResult, deleteKnockoutMatch, saveKnockoutMatch, onAllPredictions, onAllResults, onKnockoutMatches, onArenaSettings, updateArenaSettings, onFixtureOverrides, saveFixtureOverride, onUndoStatus, setUndoPoint, undoLastFixtureEdit, updateUserProfile, onUserPredictions, getStreamLinks, saveStreamLinks, onStreamLinks } from "./lib/db";
+import { createUserProfile, getUserProfile, onAllUsers, savePrediction, saveResult, deleteKnockoutMatch, saveKnockoutMatch, onAllPredictions, onAllResults, onKnockoutMatches, onArenaSettings, updateArenaSettings, onFixtureOverrides, saveFixtureOverride, onUndoStatus, setUndoPoint, undoLastFixtureEdit, updateUserProfile, onUserPredictions, getStreamLinks, saveStreamLinks, onStreamLinks, addChatReport, getBlockedChatUsers, unblockChatUser, onBlockedChatUsers } from "./lib/db";
 
 const FIXTURES = [
   // Group A
@@ -517,6 +517,12 @@ export default function App() {
   const [activeServerIdx, setActiveServerIdx] = useState(0);
   const [activeStreamIdx, setActiveStreamIdx] = useState(1);
   const [streamLinks, setStreamLinks] = useState(null);
+  const streamChannelRef = useRef(null);
+  const [comments, setComments] = useState([]);
+  const [commentText, setCommentText] = useState("");
+  const [blockedUsers, setBlockedUsers] = useState([]);
+  const [reportedCommentIds, setReportedCommentIds] = useState(new Set());
+  const [participantSearch, setParticipantSearch] = useState("");
   const slideDir = useRef(0);
   const scrollContainerRef = useRef(null);
   const swipeContainerRef = useRef(null);
@@ -669,6 +675,7 @@ export default function App() {
     const isStreamTab = userTab === "stream" || adminTab === "stream";
     if (!currentUser || !isStreamTab) return;
 
+    setComments([]);
     const channel = supabase.channel("stream-viewers");
 
     channel.on("presence", { event: "sync" }, () => {
@@ -676,13 +683,26 @@ export default function App() {
       setViewerList(Object.values(channel.presenceState()).flatMap(p => p || []));
     });
 
+    channel.on("broadcast", { event: "comment" }, ({ payload }) => {
+      setComments(prev => {
+        if (prev.some(c => c.id === payload.id)) return prev;
+        const next = [...prev, payload];
+        if (next.length > 50) next.splice(0, next.length - 50);
+        return next;
+      });
+    });
+
     channel.subscribe(async (status) => {
       if (status === "SUBSCRIBED") {
+        streamChannelRef.current = channel;
         await channel.track({ user_id: currentUser.id, name: currentUser.name, email: currentUser.email });
       }
     });
 
-    return () => { channel.unsubscribe(); };
+    return () => {
+      streamChannelRef.current = null;
+      channel.unsubscribe();
+    };
   }, [currentUser?.id, userTab, adminTab]);
 
   useEffect(() => {
@@ -697,6 +717,64 @@ export default function App() {
     });
     return () => unsub();
   }, []);
+
+  useEffect(() => {
+    const unsub = onBlockedChatUsers((blocked) => {
+      setBlockedUsers(blocked);
+    });
+    return () => unsub();
+  }, []);
+
+  const sendComment = (text) => {
+    if (!text.trim()) return;
+    if (blockedUsers.some(b => b.reported_user_id === currentUser.id)) {
+      showToast("You have been blocked from chat", "error");
+      return;
+    }
+    const ch = streamChannelRef.current;
+    if (!ch) return;
+    ch.send({
+      type: "broadcast",
+      event: "comment",
+      payload: {
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+        text: text.trim(),
+        name: currentUser.name,
+        user_id: currentUser.id,
+        timestamp: Date.now(),
+      },
+    });
+    setCommentText("");
+  };
+
+  const handleReport = async (comment) => {
+    if (reportedCommentIds.has(comment.id)) {
+      showToast("Already reported", "error");
+      return;
+    }
+    try {
+      await addChatReport(
+        comment.user_id,
+        comment.name,
+        currentUser.email || "",
+        currentUser.id,
+        comment.text
+      );
+      setReportedCommentIds(prev => new Set(prev).add(comment.id));
+      showToast("Comment reported");
+    } catch {
+      showToast("Failed to report", "error");
+    }
+  };
+
+  const handleUnblock = async (userId) => {
+    try {
+      await unblockChatUser(userId);
+      showToast("User unblocked");
+    } catch {
+      showToast("Failed to unblock", "error");
+    }
+  };
 
   const handleRefresh = () => {
     setPullDistance(0);
@@ -1411,6 +1489,12 @@ export default function App() {
                       {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
                     </button>
                   )}
+                  <button className="p-2 rounded-lg text-white/40 hover:text-white/80 transition-colors flex items-center gap-1" onClick={() => window.open("https://1.1.1.1", "_blank")} title="Open 1.1.1.1 Warp">
+                    <Shield className="h-4 w-4" />
+                  </button>
+                  <button className="p-2 rounded-lg text-white/40 hover:text-white/80 transition-colors flex items-center gap-1" onClick={() => window.open("https://1-1-1-1.en.uptodown.com/android", "_blank")} title="Download 1.1.1.1 for Android">
+                    <Shield className="h-3 w-3" /><span className="text-[8px] font-semibold">Android</span>
+                  </button>
                   <button className="p-2 rounded-lg text-red-400 hover:bg-white/5 transition-colors" onClick={handleLogout} title="Logout">
                     <LogOut className="h-4 w-4" />
                   </button>
@@ -1678,9 +1762,9 @@ export default function App() {
                   {/* ─── USER: Live Stream ─── */}
                   {userTab === "stream" && !isAdmin && (() => {
                     const now = new Date();
-                    const nextMatch = sortedFixtures.find(f => new Date(f.date).getTime() + 6600000 > now.getTime());
+                    const nextMatch = sortedFixtures.find(f => new Date(f.date).getTime() + 9600000 > now.getTime());
                     const streamStart = nextMatch ? new Date(new Date(nextMatch.date).getTime() - 600000) : null;
-                    const streamEnd = nextMatch ? new Date(new Date(nextMatch.date).getTime() + 6600000) : null;
+                    const streamEnd = nextMatch ? new Date(new Date(nextMatch.date).getTime() + 9600000) : null;
                     const isStreaming = streamStart && streamEnd && now >= streamStart && now <= streamEnd;
                     const isBefore = streamStart && now < streamStart;
                     const isAfter = streamEnd && now > streamEnd;
@@ -1795,6 +1879,64 @@ export default function App() {
                             )}
                           </div>
                         )}
+                        {/* ─── LIVE CHAT ─── */}
+                        <div className="liquid-glass p-4 rounded-xl border border-white/5">
+                          <div className="flex items-center justify-between mb-3">
+                            <p className="text-[9px] text-white/40 uppercase tracking-wider">Live Chat</p>
+                            {blockedUsers.some(b => b.reported_user_id === currentUser.id) && (
+                              <span className="text-[9px] text-red-400 flex items-center gap-1">
+                                <Ban className="h-3 w-3" /> Blocked
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[8px] text-white/30 uppercase tracking-wider mb-3 leading-relaxed">
+                            Be respectful. No harassment, hate speech, or spam. Report inappropriate comments using the flag button.
+                          </p>
+                          <div className="max-h-48 overflow-y-auto space-y-2 mb-3 scrollbar-thin">
+                            {comments.length === 0 ? (
+                              <p className="text-[10px] text-white/30 text-center py-4">No messages yet. Be the first to chat!</p>
+                            ) : (
+                              comments.map(c => (
+                                <div key={c.id} className="flex items-start gap-2 text-left">
+                                  <span className="text-[10px] font-semibold text-white/90 shrink-0 mt-0.5">{c.name}:</span>
+                                  <span className="text-[10px] text-white/60 break-words flex-1">{c.text}</span>
+                                  <button
+                                    onClick={() => handleReport(c)}
+                                    disabled={reportedCommentIds.has(c.id)}
+                                    className={`shrink-0 mt-0.5 transition-colors ${
+                                      reportedCommentIds.has(c.id)
+                                        ? "text-red-400/50 cursor-not-allowed"
+                                        : "text-white/20 hover:text-red-400"
+                                    }`}
+                                    title={reportedCommentIds.has(c.id) ? "Reported" : "Report"}
+                                  >
+                                    <Flag className="h-3 w-3" />
+                                  </button>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                          {!blockedUsers.some(b => b.reported_user_id === currentUser.id) ? (
+                            <div className="flex gap-2">
+                              <input
+                                value={commentText}
+                                onChange={e => setCommentText(e.target.value)}
+                                onKeyDown={e => { if (e.key === "Enter") sendComment(commentText); }}
+                                placeholder="Type a message..."
+                                className="flex-1 bg-white/[0.06] border border-white/10 rounded-lg px-3 py-2 text-[11px] text-white placeholder-white/30 outline-none focus:border-white/30"
+                                maxLength={200}
+                              />
+                              <button
+                                onClick={() => sendComment(commentText)}
+                                className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors text-white/70 hover:text-white"
+                              >
+                                <Send className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <p className="text-[9px] text-red-400/70 text-center">You have been blocked from sending messages.</p>
+                          )}
+                        </div>
                       </div>
                     );
                   })()}
@@ -2412,6 +2554,34 @@ export default function App() {
                               </div>
                             </div>
                           )}
+                          {blockedUsers.length > 0 && (
+                            <div className="liquid-glass p-4 rounded-xl border border-red-500/20">
+                              <div className="flex items-center gap-2 mb-3">
+                                <AlertTriangle className="h-3.5 w-3.5 text-red-400" />
+                                <p className="text-[9px] text-red-400 uppercase tracking-wider">Blocked Users ({blockedUsers.length})</p>
+                              </div>
+                              <div className="space-y-2 max-h-40 overflow-y-auto">
+                                {blockedUsers.map((b, i) => {
+                                  const userObj = Object.values(users).find(u => u.id === b.reported_user_id);
+                                  return (
+                                    <div key={i} className="flex items-center justify-between text-xs">
+                                      <div>
+                                        <span className="text-white/80 font-medium">{b.reported_user_name}</span>
+                                        <span className="text-white/40 text-[10px] ml-2">{userObj?.email || b.reported_user_email}</span>
+                                        <span className="text-red-400 text-[9px] ml-2">({b.report_count} reports)</span>
+                                      </div>
+                                      <button
+                                        onClick={() => handleUnblock(b.reported_user_id)}
+                                        className="text-[9px] px-2 py-1 rounded bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors"
+                                      >
+                                        Unblock
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -2433,22 +2603,35 @@ export default function App() {
                       {/* ADMIN: Participants (clickable for history) */}
                       {adminTab === "participants" && !viewingParticipant && (
                         <div className="space-y-2">
-                          {Object.values(users).map(u => {
-                            const count = allFixtures.filter(f => predictions[`${u.id}_${f.id}`]).length;
-                            return (
-                              <div key={u.id} className="liquid-glass p-4 rounded-xl border border-white/5 flex items-center justify-between text-left cursor-pointer hover:border-white/20 transition-colors"
-                                onClick={() => setViewingParticipant(u)}>
-                                <div>
-                                  <h4 className="text-sm font-semibold text-white">{u.name}</h4>
-                                  <span className="text-[10px] text-white/40 uppercase tracking-widest block mt-0.5">{u.dept} • {u.year || "1st Year"}</span>
+                          <input
+                            value={participantSearch}
+                            onChange={e => setParticipantSearch(e.target.value)}
+                            placeholder="Search participants by name..."
+                            className="w-full bg-white/[0.06] border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-white/30 outline-none focus:border-white/30"
+                          />
+                          {leaderboard
+                            .filter(u => !u.isAdmin)
+                            .filter(u => u.name.toLowerCase().includes(participantSearch.toLowerCase()))
+                            .map(u => {
+                              const count = allFixtures.filter(f => predictions[`${u.id}_${f.id}`]).length;
+                              return (
+                                <div key={u.id} className="liquid-glass p-4 rounded-xl border border-white/5 flex items-center justify-between text-left cursor-pointer hover:border-white/20 transition-colors"
+                                  onClick={() => setViewingParticipant(u)}>
+                                  <div>
+                                    <h4 className="text-sm font-semibold text-white">{u.name}</h4>
+                                    <span className="text-[10px] text-white/40 uppercase tracking-widest block mt-0.5">{u.dept} • {u.year || "1st Year"}</span>
+                                  </div>
+                                  <div className="text-right flex items-center gap-3">
+                                    <span className="text-xs font-semibold text-white/60 block">{count} / {allFixtures.length}</span>
+                                    <span className="font-heading italic text-sm text-amber-400 font-bold">{u.points} PTS</span>
+                                    <Eye className="h-3.5 w-3.5 text-white/40" />
+                                  </div>
                                 </div>
-                                <div className="text-right flex items-center gap-3">
-                                  <span className="text-xs font-semibold text-white block">{count} / {allFixtures.length}</span>
-                                  <Eye className="h-3.5 w-3.5 text-white/40" />
-                                </div>
-                              </div>
-                            );
-                          })}
+                              );
+                            })}
+                          {leaderboard.filter(u => !u.isAdmin).filter(u => u.name.toLowerCase().includes(participantSearch.toLowerCase())).length === 0 && (
+                            <p className="text-[10px] text-white/40 text-center py-4">No participants found</p>
+                          )}
                         </div>
                       )}
 
