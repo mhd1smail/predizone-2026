@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, ArrowUpRight, Play, Award, LogOut, CheckCircle, User, Zap, Mail, Target, Lock, Unlock, Eye, Trophy, Calendar, Volume2, VolumeX, Tv } from "lucide-react";
 import { useAuth } from "./context/AuthContext";
 import { signInWithGoogle, signOutUser } from "./lib/auth";
-import { createUserProfile, getUserProfile, onAllUsers, savePrediction, saveResult, deleteKnockoutMatch, saveKnockoutMatch, onAllPredictions, onAllResults, onKnockoutMatches, onArenaSettings, updateArenaSettings, onFixtureOverrides, saveFixtureOverride, onUndoStatus, setUndoPoint, undoLastFixtureEdit, updateUserProfile, submitStreamResponse, onStreamResponses, clearStreamPoll } from "./lib/db";
+import { createUserProfile, getUserProfile, onAllUsers, savePrediction, saveResult, deleteKnockoutMatch, saveKnockoutMatch, onAllPredictions, onAllResults, onKnockoutMatches, onArenaSettings, updateArenaSettings, onFixtureOverrides, saveFixtureOverride, onUndoStatus, setUndoPoint, undoLastFixtureEdit, updateUserProfile, submitStreamResponse, onStreamResponses, clearStreamPoll, onUserPredictions } from "./lib/db";
 
 const FIXTURES = [
   // Group A
@@ -586,10 +586,14 @@ export default function App() {
     const unsubResults = onAllResults((r) => setResults(r));
     const unsubKnock = onKnockoutMatches((k) => setKnockoutFixtures(k));
     const unsubPreds = onAllPredictions((preds) => {
-      setPredictions(preds);
+      setPredictions(prev => ({ ...prev, ...preds }));
     });
 
-    return () => { unsubUsers(); unsubResults(); unsubKnock(); unsubPreds(); };
+    const unsubMyPreds = onUserPredictions(currentUser.id, (preds) => {
+      setPredictions(prev => ({ ...prev, ...preds }));
+    });
+
+    return () => { unsubUsers(); unsubResults(); unsubKnock(); unsubPreds(); unsubMyPreds(); };
   }, [currentUser]);
 
   useEffect(() => {
