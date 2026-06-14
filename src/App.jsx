@@ -464,30 +464,30 @@ function Countdown({ target, label }) {
 
 const DEFAULT_STREAM_LINKS = {
   server1: "https://embed.st/embed/admin/ppv-{home}-vs-{away}/",
-  server2: "https://embed.st/embed/delta/live_world-championship-gr-b_{home}-vs-{away}-live-streaming-1243362393/",
-  server3: "https://embed.st/embed/echo/{home}-vs-{away}-german-spanish-game-2026/",
-  server4: "https://embed.st/embed/golf/23094/",
+  server2: "https://embed.st/embed/delta/live_world-championship-gr-d_{home}-vs-{away}-live-streaming-1243365390/",
+  server3: "https://embed.st/embed/echo/{home}-vs-{away}-football-1539001/",
+  server4: "https://embed.st/embed/golf/23114/",
 };
 
 const STREAM_SERVERS = [
   {
     label: "Server 1",
-    base: "/embed/admin/ppv-qatar-vs-switzerland",
+    base: "/embed/admin/ppv-australia-vs-turkiye",
     streams: 6,
   },
   {
     label: "Server 2",
-    base: "/embed/delta/live_world-championship-gr-b_qatar-switzerland-live-streaming-1243362393",
+    base: "/embed/delta/live_world-championship-gr-d_australia-turkiye-live-streaming-1243365390",
     streams: 3,
   },
   {
     label: "Server 3",
-    base: "/embed/echo/qatar-vs-switzerland-german-spanish-game-2026",
+    base: "/embed/echo/australia-vs-turkiye-football-1539001",
     streams: 4,
   },
   {
     label: "Server 4",
-    base: "/embed/golf/23094",
+    base: "/embed/golf/23114",
     streams: 2,
   },
 ];
