@@ -313,17 +313,14 @@ export async function getStreamLinks() {
     .eq("id", "stream_links")
     .maybeSingle();
   if (error && error.code !== "PGRST116") throw error;
-  return data?.links || null;
+  return data?.overrides || null;
 }
 
 export async function saveStreamLinks(links) {
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from("settings")
-    .upsert({ id: "stream_links", links, updated_at: new Date().toISOString() })
-    .select()
-    .single();
+    .upsert({ id: "stream_links", overrides: links, updated_at: new Date().toISOString() });
   if (error) throw error;
-  return data;
 }
 
 export function onStreamLinks(callback) {
@@ -331,12 +328,12 @@ export function onStreamLinks(callback) {
     .channel("stream-links")
     .on("postgres_changes",
       { event: "*", schema: "public", table: "settings", filter: "id=eq.stream_links" },
-      (payload) => callback(payload.new?.links || null)
+      (payload) => callback(payload.new?.overrides || null)
     )
     .subscribe();
   const initialFetch = async () => {
-    const { data } = await supabase.from("settings").select("*").eq("id", "stream_links").single();
-    callback(data?.links || null);
+    const { data } = await supabase.from("settings").select("*").eq("id", "stream_links").maybeSingle();
+    callback(data?.overrides || null);
   };
   initialFetch();
   return () => supabase.removeChannel(channel);

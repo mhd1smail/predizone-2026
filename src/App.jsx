@@ -1763,9 +1763,9 @@ export default function App() {
                   {/* ─── USER: Live Stream ─── */}
                   {userTab === "stream" && !isAdmin && (() => {
                     const now = new Date();
-                    const nextMatch = sortedFixtures.find(f => new Date(f.date).getTime() + 9000000 > now.getTime());
+                    const nextMatch = sortedFixtures.find(f => new Date(f.date).getTime() + 8700000 > now.getTime());
                     const streamStart = nextMatch ? new Date(new Date(nextMatch.date).getTime() - 600000) : null;
-                    const streamEnd = nextMatch ? new Date(new Date(nextMatch.date).getTime() + 9000000) : null;
+                    const streamEnd = nextMatch ? new Date(new Date(nextMatch.date).getTime() + 8700000) : null;
                     const isStreaming = streamStart && streamEnd && now >= streamStart && now <= streamEnd;
                     const isBefore = streamStart && now < streamStart;
                     const isAfter = streamEnd && now > streamEnd;
