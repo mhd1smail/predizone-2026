@@ -146,15 +146,13 @@ export function onUserPredictions(uid, callback) {
     .channel(`user-preds-${uid}`)
     .on("postgres_changes",
       { event: "*", schema: "public", table: "predictions", filter: `user_id=eq.${uid}` },
-      () => {
-        supabase.from("predictions").select("*").eq("user_id", uid).limit(1000000).then(({ data }) => {
-          const preds = {};
-          (data || []).forEach((p) => {
-            const key = `${uid}_${p.fixture_id}`;
-            preds[key] = mapPrediction(p);
-          });
-          callback(preds);
-        });
+      (payload) => {
+        if (payload.new && payload.new.user_id && payload.new.fixture_id) {
+          const key = `${uid}_${payload.new.fixture_id}`;
+          const predObj = {};
+          predObj[key] = mapPrediction(payload.new);
+          callback(predObj);
+        }
       }
     )
     .subscribe();
@@ -162,31 +160,63 @@ export function onUserPredictions(uid, callback) {
 }
 
 export function onAllPredictions(callback) {
-  supabase.from("predictions").select("*").limit(1000000).then(({ data }) => {
-    const preds = {};
-    (data || []).forEach((p) => {
-      const key = `${p.user_id}_${p.fixture_id}`;
-      preds[key] = mapPrediction(p);
-    });
-    callback(preds);
-  });
   const channel = supabase
     .channel("all-predictions")
     .on("postgres_changes",
       { event: "*", schema: "public", table: "predictions" },
-      () => {
-        supabase.from("predictions").select("*").limit(1000000).then(({ data }) => {
-          const preds = {};
-          (data || []).forEach((p) => {
-            const key = `${p.user_id}_${p.fixture_id}`;
-            preds[key] = mapPrediction(p);
-          });
-          callback(preds);
-        });
+      (payload) => {
+        if (payload.new && payload.new.user_id && payload.new.fixture_id) {
+          const key = `${payload.new.user_id}_${payload.new.fixture_id}`;
+          const predObj = {};
+          predObj[key] = mapPrediction(payload.new);
+          callback(predObj);
+        }
       }
     )
     .subscribe();
-  return () => supabase.removeChannel(channel);
+
+  const broadcastChannel = supabase
+    .channel("prediction-sync")
+    .on("broadcast", { event: "prediction-changed" }, ({ payload }) => {
+      if (payload && payload.uid && payload.fixtureId) {
+        const key = `${payload.uid}_${payload.fixtureId}`;
+        const predObj = {};
+        predObj[key] = {
+          uid: payload.uid,
+          fixtureId: String(payload.fixtureId),
+          winner: payload.winner || null,
+          homeGoals: payload.homeGoals !== undefined ? payload.homeGoals : null,
+          awayGoals: payload.awayGoals !== undefined ? payload.awayGoals : null,
+          submittedAt: payload.submittedAt || null,
+        };
+        callback(predObj);
+      }
+    })
+    .subscribe();
+
+  (async () => {
+    let allData = [];
+    let from = 0;
+    const pageSize = 1000;
+    while (true) {
+      const { data } = await supabase.from("predictions").select("*").range(from, from + pageSize - 1);
+      if (!data || data.length === 0) break;
+      allData = allData.concat(data);
+      if (data.length < pageSize) break;
+      from += pageSize;
+    }
+    const preds = {};
+    allData.forEach((p) => {
+      const key = `${p.user_id}_${p.fixture_id}`;
+      preds[key] = mapPrediction(p);
+    });
+    callback(preds);
+  })();
+
+  return () => {
+    supabase.removeChannel(channel);
+    supabase.removeChannel(broadcastChannel);
+  };
 }
 
 export async function saveResult(fixtureId, result) {
@@ -499,6 +529,20 @@ export function onBlockedChatUsers(callback) {
     .subscribe();
   getBlockedChatUsers().then(callback);
   return () => supabase.removeChannel(channel);
+}
+
+export function sendPredictionBroadcast(prediction) {
+  const channel = supabase.channel("prediction-sync");
+  channel.subscribe((status) => {
+    if (status === "SUBSCRIBED") {
+      channel.send({
+        type: "broadcast",
+        event: "prediction-changed",
+        payload: prediction,
+      });
+      setTimeout(() => supabase.removeChannel(channel), 1000);
+    }
+  });
 }
 
 function mapProfile(data) {
