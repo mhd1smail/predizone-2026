@@ -756,19 +756,19 @@ export default function App() {
     if (!pullTouch.current.pulling) return;
     pullTouch.current.pulling = false;
     if (scrollContainerRef.current) scrollContainerRef.current.style.overflow = "";
-    if (pullTouch.current.swiping) {
+    if (pullTouch.current.swiping && !isAdmin) {
       pullTouch.current.swiping = false;
       const dx = e.changedTouches[0].clientX - pullTouch.current.startX;
       if (Math.abs(dx) > 50) {
-        const tabs = isAdmin ? adminTabs : userTabs;
-        const cur = isAdmin ? adminTab : userTab;
+        const tabs = userTabs;
+        const cur = userTab;
         const idx = tabs.indexOf(cur);
         if (idx !== -1) {
           slideDir.current = dx > 0 ? -1 : 1;
           setSwipeOffset(dx > 0 ? 500 : -500);
           const target = dx > 0 ? tabs[Math.max(0, idx - 1)] : tabs[Math.min(tabs.length - 1, idx + 1)];
           setTimeout(() => {
-            isAdmin ? setAdminTab(target) : setUserTab(target);
+            setUserTab(target);
             setSwipeOffset(0);
           }, 200);
         } else {
@@ -777,6 +777,11 @@ export default function App() {
       } else {
         setSwipeOffset(0);
       }
+      return;
+    }
+    if (pullTouch.current.swiping) {
+      pullTouch.current.swiping = false;
+      setSwipeOffset(0);
       return;
     }
     const el = scrollContainerRef.current;
