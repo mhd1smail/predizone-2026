@@ -468,9 +468,8 @@ export default function App() {
   const [verifyRegNo, setVerifyRegNo] = useState("");
   const [verifyDept, setVerifyDept] = useState("");
   const [chatInput, setChatInput] = useState("");
-  const [notifyAdmin, setNotifyAdmin] = useState(false);
-  const [notifyPerm, setNotifyPerm] = useState(Notification.permission);
   const notifiedVerifRef = useRef(new Set());
+  const [notifRefresh, setNotifRefresh] = useState(0);
   const [msgReportCounts, setMsgReportCounts] = useState({});
   const [hasUnreadChat, setHasUnreadChat] = useState(false);
   const [viewingParticipant, setViewingParticipant] = useState(null);
@@ -627,9 +626,9 @@ export default function App() {
       setChatVerifications(v);
       const pending = v.filter(x => x.status === "pending");
       pending.forEach(p => {
-        if (!notifiedVerifRef.current.has(p.id) && notifyAdmin && notifyPerm === "granted") {
+        if (!notifiedVerifRef.current.has(p.id) && typeof Notification !== "undefined" && Notification.permission === "granted") {
           notifiedVerifRef.current.add(p.id);
-          try { new Notification("PrediZone Connect", { body: `New verification request from ${p.user_id}` }); } catch {}
+          try { new Notification("PrediZone Connect", { body: "New verification request" }); } catch {}
         }
       });
     });
@@ -728,7 +727,6 @@ export default function App() {
     pullTouch.current.startY = t.clientY;
     pullTouch.current.pulling = true;
     pullTouch.current.swiping = false;
-    if (isAdmin) pullTouch.current.pulling = false;
   };
 
   const handleTouchMove = (e) => {
@@ -1141,7 +1139,7 @@ export default function App() {
         )}
 
         {/* ─── Admin Notification: New Verification Request ─── */}
-        {isAdmin && notifyAdmin && chatVerifications.some(v => v.status === "pending") && (
+        {isAdmin && chatVerifications.some(v => v.status === "pending") && (
           <div className="fixed bottom-20 right-4 z-[100] liquid-glass rounded-xl p-3 border border-amber-500/20 max-w-xs shadow-xl">
             <p className="text-xs font-semibold text-amber-400 uppercase tracking-wider">New Request</p>
             <p className="text-sm text-white/80 mt-1">{chatVerifications.filter(v => v.status === "pending").length} pending verification(s)</p>
@@ -2362,17 +2360,18 @@ export default function App() {
 
                       {adminTab === "connect" && (
                         <div className="space-y-6">
-                          {/* Notification toggle */}
-                          <div className="liquid-glass rounded-xl p-3 border border-white/5 flex items-center justify-between">
-                            <span className="text-xs font-semibold text-white/80 uppercase tracking-wider">🔔 Notifications</span>
-                            <button onClick={async () => {
-                              if (!notifyAdmin && notifyPerm !== "granted") {
-                                const p = await Notification.requestPermission();
-                                setNotifyPerm(p);
-                              }
-                              setNotifyAdmin(!notifyAdmin);
-                            }} className={`text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg transition-colors ${notifyAdmin ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-white/5 text-white/40 border border-white/10'}`}>{notifyAdmin ? 'ON' : 'OFF'}</button>
-                          </div>
+                          {/* Notification permission button */}
+                          {typeof Notification !== "undefined" && (
+                            <div className="liquid-glass rounded-xl p-3 border border-amber-500/10 flex items-center justify-between">
+                              <div>
+                                <span className="text-xs font-semibold text-white/80 uppercase tracking-wider">🔔 Notifications</span>
+                                <p className="text-[9px] text-white/40 mt-0.5">
+                                  {Notification.permission === "granted" ? "✓ Notifications active" : Notification.permission === "denied" ? "Blocked — enable in browser site settings" : "New request alerts"}
+                                </p>
+                              </div>
+                              <button onClick={async () => { await Notification.requestPermission(); setNotifRefresh(n => n + 1); }} className="bg-amber-500/20 text-amber-400 text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-amber-500/30 hover:bg-amber-500/30 shrink-0">{Notification.permission === "granted" ? "Active" : "Enable"}</button>
+                            </div>
+                          )}
 
                           {/* ─── Chat ─── */}
                           <div>
