@@ -492,45 +492,6 @@ export async function addChatReport(reportedUserId, reportedUserName, reportedUs
   if (error) throw error;
 }
 
-export async function getBlockedChatUsers() {
-  const { data, error } = await supabase
-    .from("chat_reports")
-    .select("*")
-    .limit(1000000);
-  if (error) throw error;
-  const counts = {};
-  (data || []).forEach(r => {
-    counts[r.reported_user_id] = counts[r.reported_user_id] || { count: 0, name: r.reported_user_name, email: r.reported_user_email || "" };
-    counts[r.reported_user_id].count++;
-  });
-  return Object.entries(counts)
-    .filter(([_, v]) => v.count >= 5)
-    .map(([id, v]) => ({ reported_user_id: id, reported_user_name: v.name, reported_user_email: v.email, report_count: v.count }));
-}
-
-export async function unblockChatUser(userId) {
-  const { error } = await supabase
-    .from("chat_reports")
-    .delete()
-    .eq("reported_user_id", userId);
-  if (error) throw error;
-}
-
-export function onBlockedChatUsers(callback) {
-  const channel = supabase
-    .channel("chat-reports-monitor")
-    .on("postgres_changes",
-      { event: "*", schema: "public", table: "chat_reports" },
-      async () => {
-        const blocked = await getBlockedChatUsers();
-        callback(blocked);
-      }
-    )
-    .subscribe();
-  getBlockedChatUsers().then(callback);
-  return () => supabase.removeChannel(channel);
-}
-
 export function sendPredictionBroadcast(prediction) {
   const channel = supabase.channel("prediction-sync");
   channel.subscribe((status) => {
@@ -582,3 +543,202 @@ function mapResult(data) {
     enteredAt: data.entered_at,
   };
 }
+
+// ── Chat ────────────────────────────────────────────────────────────
+
+export async function sendChatMessage(uid, name, message, isAdmin) {
+  const { data, error } = await supabase
+    .from("chat_messages")
+    .insert({ user_id: uid, user_name: name, message, is_admin: isAdmin })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export function onChatMessages(callback) {
+  supabase
+    .from("chat_messages")
+    .select("*")
+    .order("created_at", { ascending: true })
+    .limit(50)
+    .then(({ data }) => callback(data || []));
+
+  const channel = supabase
+    .channel("chat-messages")
+    .on("postgres_changes",
+      { event: "*", schema: "public", table: "chat_messages" },
+      () => {
+        supabase
+          .from("chat_messages")
+          .select("*")
+          .order("created_at", { ascending: true })
+          .limit(50)
+          .then(({ data }) => callback(data || []));
+      }
+    )
+    .subscribe();
+  return () => supabase.removeChannel(channel);
+}
+
+// ── Message Reports ─────────────────────────────────────────────────
+
+export function onMessageReportCounts(callback) {
+  const fetchCounts = () => {
+    supabase.from("chat_message_reports").select("*").limit(5000).then(({ data }) => {
+      const counts = {};
+      (data || []).forEach(r => {
+        counts[r.message_id] = (counts[r.message_id] || 0) + 1;
+      });
+      callback(counts);
+    });
+  };
+  fetchCounts();
+
+  const channel = supabase
+    .channel("msg-report-counts")
+    .on("postgres_changes",
+      { event: "*", schema: "public", table: "chat_message_reports" },
+      fetchCounts
+    )
+    .subscribe();
+  return () => supabase.removeChannel(channel);
+}
+
+export async function hasReportedMessage(messageId, reporterUserId) {
+  const { data } = await supabase
+    .from("chat_message_reports")
+    .select("id")
+    .eq("message_id", messageId)
+    .eq("reporter_user_id", reporterUserId)
+    .maybeSingle();
+  return !!data;
+}
+
+export async function reportMessage(messageId, reportedUserId, reporterUserId) {
+  const { error } = await supabase.from("chat_message_reports").insert({
+    message_id: messageId,
+    reported_user_id: reportedUserId,
+    reporter_user_id: reporterUserId,
+  });
+  if (error) throw error;
+
+  // 5 reports → soft-delete message
+  const { count: msgReportCount } = await supabase
+    .from("chat_message_reports")
+    .select("id", { count: "exact", head: true })
+    .eq("message_id", messageId);
+  if (msgReportCount >= 5) {
+    await supabase.from("chat_messages").update({ is_deleted: true }).eq("id", messageId);
+  }
+
+  // 15 reports in 24h → block user
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { count: userReportCount } = await supabase
+    .from("chat_message_reports")
+    .select("id", { count: "exact", head: true })
+    .eq("reported_user_id", reportedUserId)
+    .gte("created_at", since);
+  if (userReportCount >= 15) {
+    await supabase.from("chat_blocks").upsert({
+      user_id: reportedUserId,
+      reason: "Exceeded 15 reports in 24 hours",
+    }, { onConflict: "user_id" });
+  }
+}
+
+// ── Verification ────────────────────────────────────────────────────
+
+export async function submitVerification(userId, registerNumber, department) {
+  const { data, error } = await supabase
+    .from("chat_verifications")
+    .upsert({ user_id: userId, register_number: registerNumber, department, status: "pending" }, { onConflict: "user_id" })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export function onVerifications(callback) {
+  supabase
+    .from("chat_verifications")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(1000)
+    .then(({ data }) => callback(data || []));
+
+  const channel = supabase
+    .channel("chat-verifications")
+    .on("postgres_changes",
+      { event: "*", schema: "public", table: "chat_verifications" },
+      () => {
+        supabase
+          .from("chat_verifications")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(1000)
+          .then(({ data }) => callback(data || []));
+      }
+    )
+    .subscribe();
+  return () => supabase.removeChannel(channel);
+}
+
+export async function approveVerification(userId, adminId) {
+  const { error } = await supabase
+    .from("chat_verifications")
+    .update({ status: "approved", reviewed_at: new Date().toISOString(), reviewed_by: adminId })
+    .eq("user_id", userId);
+  if (error) throw error;
+}
+
+export async function rejectVerification(userId, adminId) {
+  const { error } = await supabase
+    .from("chat_verifications")
+    .update({ status: "rejected", reviewed_at: new Date().toISOString(), reviewed_by: adminId })
+    .eq("user_id", userId);
+  if (error) throw error;
+}
+
+export async function getUserVerification(userId) {
+  const { data, error } = await supabase
+    .from("chat_verifications")
+    .select("*")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error && error.code !== "PGRST116") throw error;
+  return data || null;
+}
+
+// ── Blocked Users ───────────────────────────────────────────────────
+
+export async function getChatBlockedUsers() {
+  const { data, error } = await supabase
+    .from("chat_blocks")
+    .select("*")
+    .order("blocked_at", { ascending: false })
+    .limit(1000);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function unblockChatUser(userId) {
+  const { error } = await supabase.from("chat_blocks").delete().eq("user_id", userId);
+  if (error) throw error;
+}
+
+export function onChatBlockedUsers(callback) {
+  getChatBlockedUsers().then(callback);
+  const channel = supabase
+    .channel("chat-blocks")
+    .on("postgres_changes",
+      { event: "*", schema: "public", table: "chat_blocks" },
+      async () => {
+        const blocked = await getChatBlockedUsers();
+        callback(blocked);
+      }
+    )
+    .subscribe();
+  return () => supabase.removeChannel(channel);
+}
+

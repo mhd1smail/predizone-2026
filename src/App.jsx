@@ -1,10 +1,10 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect, useRef, useMemo } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, ArrowUpRight, Play, Award, LogOut, CheckCircle, User, Zap, Mail, Target, Lock, Unlock, Eye, Trophy, Calendar, Volume2, VolumeX, Tv, Shield } from "lucide-react";
+import { ArrowLeft, ArrowRight, ArrowUpRight, Play, Award, LogOut, CheckCircle, User, Zap, Mail, Target, Lock, Unlock, Eye, Trophy, Calendar, Volume2, VolumeX, MessageCircle, Shield } from "lucide-react";
 import { useAuth } from "./context/AuthContext";
 import { signInWithGoogle, signOutUser } from "./lib/auth";
-import { createUserProfile, getUserProfile, onAllUsers, savePrediction, saveResult, deleteKnockoutMatch, saveKnockoutMatch, onAllPredictions, onAllResults, onKnockoutMatches, onArenaSettings, updateArenaSettings, onFixtureOverrides, saveFixtureOverride, onUndoStatus, setUndoPoint, undoLastFixtureEdit, updateUserProfile, onUserPredictions, sendPredictionBroadcast } from "./lib/db";
+import { createUserProfile, getUserProfile, onAllUsers, savePrediction, saveResult, deleteKnockoutMatch, saveKnockoutMatch, onAllPredictions, onAllResults, onKnockoutMatches, onArenaSettings, updateArenaSettings, onFixtureOverrides, saveFixtureOverride, onUndoStatus, setUndoPoint, undoLastFixtureEdit, updateUserProfile, onUserPredictions, sendPredictionBroadcast, sendChatMessage, onChatMessages, hasReportedMessage, reportMessage, onMessageReportCounts, submitVerification, onVerifications, approveVerification, rejectVerification, getUserVerification, getChatBlockedUsers, unblockChatUser, onChatBlockedUsers } from "./lib/db";
 
 const FIXTURES = [
   // Group A
@@ -455,10 +455,24 @@ export default function App() {
   const scrollContainerRef = useRef(null);
   const swipeContainerRef = useRef(null);
   const tabBarRef = useRef(null);
-  const userTabs = useMemo(() => ["fixtures", "stream", "upcoming", "finished", "leaderboard", "you"], []);
-  const adminTabs = useMemo(() => ["results", "matches", "custommatch", "winners", "upcoming", "finished", "stream", "leaderboard", "participants"], []);
+  const userTabs = useMemo(() => ["fixtures", "connect", "upcoming", "finished", "leaderboard", "you"], []);
+  const adminTabs = useMemo(() => ["results", "matches", "custommatch", "winners", "upcoming", "finished", "connect", "leaderboard", "participants"], []);
   const [adminTab, setAdminTab] = useState("results");
   const [adminGroup, setAdminGroup] = useState("A");
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatVerifications, setChatVerifications] = useState([]);
+  const [chatBlockedUsers, setChatBlockedUsers] = useState([]);
+  const [userVerification, setUserVerification] = useState(null);
+  const [reportModal, setReportModal] = useState(null);
+  const [verifyModal, setVerifyModal] = useState(false);
+  const [verifyRegNo, setVerifyRegNo] = useState("");
+  const [verifyDept, setVerifyDept] = useState("");
+  const [chatInput, setChatInput] = useState("");
+  const [notifyAdmin, setNotifyAdmin] = useState(false);
+  const [notifyPerm, setNotifyPerm] = useState(Notification.permission);
+  const notifiedVerifRef = useRef(new Set());
+  const [msgReportCounts, setMsgReportCounts] = useState({});
+  const [hasUnreadChat, setHasUnreadChat] = useState(false);
   const [viewingParticipant, setViewingParticipant] = useState(null);
   const [registerName, setRegisterName] = useState("");
   const [registerDept, setRegisterDept] = useState("");
@@ -492,11 +506,26 @@ export default function App() {
   const [signingIn, setSigningIn] = useState(false);
   const [needsProfile, setNeedsProfile] = useState(false);
   const containerRef = useRef(null);
+  const chatScrollRef = useRef(null);
+  const currentTabRef = useRef("fixtures");
 
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3500);
   };
+
+  const formatTime = (ts) => {
+    if (!ts) return "";
+    const d = new Date(ts);
+    const now = new Date();
+    const diff = now - d;
+    if (diff < 60000) return "just now";
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+    return d.toLocaleDateString([], { month: "short", day: "numeric" });
+  };
+
+  useEffect(() => { currentTabRef.current = isAdmin ? adminTab : userTab; });
 
   useEffect(() => {
     if (audioRef.current) audioRef.current.muted = isMuted;
@@ -589,7 +618,27 @@ export default function App() {
       setPredictions(prev => ({ ...prev, ...preds }));
     });
 
-    return () => { unsubUsers(); unsubResults(); unsubKnock(); unsubPreds(); unsubMyPreds(); };
+    const unsubChat = onChatMessages((msgs) => {
+      setChatMessages(msgs);
+      if (currentTabRef.current !== "connect") setHasUnreadChat(true);
+      setTimeout(() => { if (chatScrollRef.current) chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight; }, 50);
+    });
+    const unsubVerif = onVerifications((v) => {
+      setChatVerifications(v);
+      const pending = v.filter(x => x.status === "pending");
+      pending.forEach(p => {
+        if (!notifiedVerifRef.current.has(p.id) && notifyAdmin && notifyPerm === "granted") {
+          notifiedVerifRef.current.add(p.id);
+          try { new Notification("PrediZone Connect", { body: `New verification request from ${p.user_id}` }); } catch {}
+        }
+      });
+    });
+    const unsubBlocked = onChatBlockedUsers((b) => setChatBlockedUsers(b));
+    const unsubReports = onMessageReportCounts(setMsgReportCounts);
+
+    getUserVerification(currentUser.id).then(setUserVerification);
+
+    return () => { unsubUsers(); unsubResults(); unsubKnock(); unsubPreds(); unsubMyPreds(); unsubChat(); unsubVerif(); unsubBlocked(); unsubReports(); };
   }, [currentUser]);
 
   useEffect(() => {
@@ -604,6 +653,71 @@ export default function App() {
   const handleRefresh = () => {
     setPullDistance(0);
     window.location.reload();
+  };
+
+  const handleSendChat = async () => {
+    if (!chatInput.trim() || !currentUser) return;
+    try {
+      await sendChatMessage(currentUser.id, currentUser.name, chatInput.trim(), isAdmin);
+      setChatInput("");
+    } catch (e) {
+      console.error("Failed to send message:", e);
+    }
+  };
+
+  const handleReportMessage = async (messageId, reportedUserId) => {
+    if (!currentUser) return;
+    const already = await hasReportedMessage(messageId, currentUser.id);
+    if (already) { showToast("Already reported", "error"); setReportModal(null); return; }
+    try {
+      await reportMessage(messageId, reportedUserId, currentUser.id);
+      showToast("Message reported");
+      setReportModal(null);
+    } catch (e) {
+      console.error("Failed to report:", e);
+    }
+  };
+
+  const handleSubmitVerification = async () => {
+    if (!currentUser || !verifyRegNo.trim()) return;
+    try {
+      await submitVerification(currentUser.id, verifyRegNo.trim(), verifyDept.trim());
+      setVerifyModal(false);
+      const v = await getUserVerification(currentUser.id);
+      setUserVerification(v);
+      showToast("Verification submitted for review");
+    } catch (e) {
+      console.error("Failed to submit verification:", e);
+    }
+  };
+
+  const handleApproveVerification = async (userId) => {
+    if (!currentUser) return;
+    try {
+      await approveVerification(userId, currentUser.id);
+      showToast("Verification approved");
+    } catch (e) {
+      console.error("Failed to approve:", e);
+    }
+  };
+
+  const handleRejectVerification = async (userId) => {
+    if (!currentUser) return;
+    try {
+      await rejectVerification(userId, currentUser.id);
+      showToast("Verification rejected");
+    } catch (e) {
+      console.error("Failed to reject:", e);
+    }
+  };
+
+  const handleUnblockChat = async (userId) => {
+    try {
+      await unblockChatUser(userId);
+      showToast("User unblocked");
+    } catch (e) {
+      console.error("Failed to unblock:", e);
+    }
   };
 
   const handleTouchStart = (e) => {
@@ -998,6 +1112,42 @@ export default function App() {
           </div>
         )}
 
+        {/* ─── Report Popup ─── */}
+        {reportModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60" onClick={() => setReportModal(null)}>
+            <div className="liquid-glass rounded-xl p-4 border border-white/10 max-w-xs mx-4" onClick={e => e.stopPropagation()}>
+              <p className="text-sm font-semibold text-white mb-3">Report this message?</p>
+              <div className="flex gap-2">
+                <button onClick={() => { handleReportMessage(reportModal.messageId, reportModal.userId); }} className="flex-1 bg-red-500/20 text-red-400 text-xs font-bold uppercase tracking-wider px-3 py-2 rounded-lg border border-red-500/30">Report</button>
+                <button onClick={() => setReportModal(null)} className="flex-1 bg-white/10 text-white/70 text-xs font-bold uppercase tracking-wider px-3 py-2 rounded-lg border border-white/10">Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ─── Verification Modal ─── */}
+        {verifyModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60" onClick={() => setVerifyModal(false)}>
+            <div className="liquid-glass rounded-xl p-5 border border-white/10 max-w-sm mx-4 w-full" onClick={e => e.stopPropagation()}>
+              <h3 className="text-sm font-bold uppercase tracking-wider text-white mb-4">Verify to Chat</h3>
+              <input value={verifyRegNo} onChange={e => setVerifyRegNo(e.target.value)} placeholder="Register Number" className="w-full bg-white/10 text-white text-sm rounded-lg px-3 py-2.5 outline-none border border-white/10 focus:border-white/30 placeholder:text-white/30 mb-2" />
+              <input value={verifyDept} onChange={e => setVerifyDept(e.target.value)} placeholder="Department" className="w-full bg-white/10 text-white text-sm rounded-lg px-3 py-2.5 outline-none border border-white/10 focus:border-white/30 placeholder:text-white/30 mb-4" />
+              <div className="flex gap-2">
+                <button onClick={handleSubmitVerification} disabled={!verifyRegNo.trim()} className="flex-1 bg-white text-black text-xs font-bold uppercase tracking-wider px-3 py-2.5 rounded-lg disabled:opacity-30">Submit</button>
+                <button onClick={() => setVerifyModal(false)} className="flex-1 bg-white/10 text-white/70 text-xs font-bold uppercase tracking-wider px-3 py-2.5 rounded-lg border border-white/10">Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ─── Admin Notification: New Verification Request ─── */}
+        {isAdmin && notifyAdmin && chatVerifications.some(v => v.status === "pending") && (
+          <div className="fixed bottom-20 right-4 z-[100] liquid-glass rounded-xl p-3 border border-amber-500/20 max-w-xs shadow-xl">
+            <p className="text-xs font-semibold text-amber-400 uppercase tracking-wider">New Request</p>
+            <p className="text-sm text-white/80 mt-1">{chatVerifications.filter(v => v.status === "pending").length} pending verification(s)</p>
+          </div>
+        )}
+
         {page === "splash" && !currentUser && !needsProfile && (
           <>
             <nav className="fixed top-4 left-0 w-full px-8 lg:px-16 z-50 flex items-center justify-between pointer-events-auto">
@@ -1335,8 +1485,8 @@ export default function App() {
                     <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "fixtures" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => setUserTab("fixtures")}>
                       <Target className="h-3 w-3 inline mr-1" />Predict
                     </button>
-                    <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "stream" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => setUserTab("stream")}>
-                      <span className={userTab !== "stream" ? "blink-pulse" : ""}><Tv className="h-3 w-3 inline mr-1" />Stream</span>
+                    <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "connect" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => { setUserTab("connect"); setHasUnreadChat(false); }}>
+                      <span className={hasUnreadChat && userTab !== "connect" ? "blink-pulse" : ""}><MessageCircle className="h-3 w-3 inline mr-1" />Connect</span>
                     </button>
                     <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "upcoming" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => setUserTab("upcoming")}>
                       <Calendar className="h-3 w-3 inline mr-1" />All
@@ -1588,12 +1738,60 @@ export default function App() {
                     );
                   })()}
 
-                  {/* ─── USER: Live Stream ─── */}
-                  {userTab === "stream" && !isAdmin && (
-                    <div className="liquid-glass rounded-[1.5rem] p-16 text-center border border-white/5">
-                      <Tv className="h-12 w-12 text-white/20 mx-auto mb-4" />
-                      <h2 className="font-heading italic text-3xl uppercase tracking-tight text-white mb-2">LIVE STREAM</h2>
-                      <p className="text-lg text-white/40 font-semibold tracking-wider uppercase">Coming Soon</p>
+                  {/* ─── USER: Connect Chat ─── */}
+                  {userTab === "connect" && !isAdmin && (
+                    <div className="flex flex-col h-full min-h-[400px]">
+                      <div className="liquid-glass rounded-[1.25rem] p-4 border border-white/5 mb-4">
+                        <p className="text-xs text-white/60 text-center font-medium">Be respectful and follow the community guidelines. Harassment, hate speech, and spam will result in a ban.</p>
+                      </div>
+
+                      <div className="flex-1 overflow-y-auto no-scrollbar space-y-2 mb-4 min-h-0" ref={chatScrollRef}>
+                        {chatMessages.length === 0 && (
+                          <div className="liquid-glass rounded-xl p-8 text-center text-white/30 text-sm uppercase tracking-wider">No messages yet</div>
+                        )}
+                        {chatMessages.map((msg) => (
+                          <div key={msg.id} className={`rounded-xl p-3 ${msg.is_admin ? 'liquid-glass border-amber-500/20' : msg.is_deleted ? 'liquid-glass opacity-60' : 'liquid-glass'}`}>
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {msg.is_admin ? (
+                                    <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">🛡️ Admin</span>
+                                  ) : (
+                                    <span className="text-xs font-semibold text-white/80">{msg.user_name}</span>
+                                  )}
+                                  <span className="text-[9px] text-white/30 whitespace-nowrap">{formatTime(msg.created_at)}</span>
+                                </div>
+                                {msg.is_deleted ? (
+                                  <p className="text-sm text-white/30 italic mt-1">[message deleted]</p>
+                                ) : (
+                                  <p className="text-sm text-white/90 mt-1 break-words">{msg.message}</p>
+                                )}
+                              </div>
+                              {!msg.is_deleted && (
+                                <div className="relative shrink-0">
+                                  <button onClick={() => setReportModal(reportModal?.messageId === msg.id ? null : { messageId: msg.id, userId: msg.user_id })} className="text-white/30 hover:text-white/60 p-1">
+                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="liquid-glass rounded-xl p-3">
+                        {userVerification?.status === "approved" ? (
+                          <div className="flex gap-2">
+                            <input value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter") handleSendChat(); }} placeholder="Type a message..." className="flex-1 bg-white/10 text-white text-sm rounded-lg px-3 py-2 outline-none border border-white/10 focus:border-white/30 placeholder:text-white/30" />
+                            <button onClick={handleSendChat} disabled={!chatInput.trim()} className="bg-white text-black text-xs font-bold uppercase tracking-wider px-4 py-2 rounded-lg disabled:opacity-30 shrink-0">Send</button>
+                          </div>
+                        ) : userVerification?.status === "pending" ? (
+                          <p className="text-center text-sm text-amber-400/80 font-medium">Your verification request is under review</p>
+                        ) : userVerification?.status === "rejected" ? (
+                          <p className="text-center text-sm text-red-400/80 font-medium">Verification rejected. Contact an admin.</p>
+                        ) : (
+                          <button onClick={() => setVerifyModal(true)} className="w-full bg-white/10 text-white text-sm font-bold uppercase tracking-wider py-3 rounded-lg hover:bg-white/15 transition-colors">Verify to Chat</button>
+                        )}
+                      </div>
                     </div>
                   )}
 
@@ -1962,7 +2160,7 @@ export default function App() {
                       </div>
 
                       <div className="flex gap-1 p-1 rounded-xl bg-white/5 border border-white/5 mb-6 overflow-x-auto no-scrollbar">
-                        {["results", "matches", "custommatch", "winners", "upcoming", "finished", "stream", "leaderboard", "participants"].map((tab) => (
+                        {["results", "matches", "custommatch", "winners", "upcoming", "finished", "connect", "leaderboard", "participants"].map((tab) => (
                           <button key={tab}
                             className={`px-3 py-1.5 rounded-lg text-[9px] font-semibold uppercase tracking-wider whitespace-nowrap transition-colors ${adminTab === tab ? "bg-white text-black" : "text-white/60 hover:text-white border border-white/10"}`}
                             onClick={() => setAdminTab(tab)}>{tab === "custommatch" ? "Custom Match" : tab === "winners" ? "Winners" : tab}</button>
@@ -2162,11 +2360,108 @@ export default function App() {
                         </div>
                       )}
 
-                      {adminTab === "stream" && (
-                        <div className="liquid-glass rounded-[1.5rem] p-16 text-center border border-white/5">
-                          <Tv className="h-12 w-12 text-white/20 mx-auto mb-4" />
-                          <h2 className="font-heading italic text-3xl uppercase tracking-tight text-white mb-2">STREAM</h2>
-                          <p className="text-lg text-white/40 font-semibold tracking-wider uppercase">Coming Soon</p>
+                      {adminTab === "connect" && (
+                        <div className="space-y-6">
+                          {/* Notification toggle */}
+                          <div className="liquid-glass rounded-xl p-3 border border-white/5 flex items-center justify-between">
+                            <span className="text-xs font-semibold text-white/80 uppercase tracking-wider">🔔 Notifications</span>
+                            <button onClick={async () => {
+                              if (!notifyAdmin && notifyPerm !== "granted") {
+                                const p = await Notification.requestPermission();
+                                setNotifyPerm(p);
+                              }
+                              setNotifyAdmin(!notifyAdmin);
+                            }} className={`text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg transition-colors ${notifyAdmin ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-white/5 text-white/40 border border-white/10'}`}>{notifyAdmin ? 'ON' : 'OFF'}</button>
+                          </div>
+
+                          {/* ─── Chat ─── */}
+                          <div>
+                            <h3 className="text-sm font-bold uppercase tracking-wider text-white/60 mb-3 border-b border-white/5 pb-2">CHAT</h3>
+                            <div className="space-y-2 max-h-[300px] overflow-y-auto no-scrollbar mb-3">
+                              {chatMessages.length === 0 && (
+                                <div className="liquid-glass rounded-xl p-6 text-center text-white/30 text-sm uppercase tracking-wider">No messages yet</div>
+                              )}
+                              {chatMessages.map((msg) => (
+                                <div key={msg.id} className={`rounded-xl p-3 ${msg.is_admin ? 'liquid-glass border-amber-500/20' : msg.is_deleted ? 'liquid-glass opacity-60' : 'liquid-glass'}`}>
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        {msg.is_admin ? (
+                                          <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">🛡️ Admin</span>
+                                        ) : (
+                                          <span className="text-xs font-semibold text-white/80">{msg.user_name}</span>
+                                        )}
+                                        <span className="text-[9px] text-white/30 whitespace-nowrap">{formatTime(msg.created_at)}</span>
+                                      </div>
+                                      {msg.is_deleted ? (
+                                        <p className="text-sm text-white/30 italic mt-1">[message deleted]</p>
+                                      ) : (
+                                        <p className="text-sm text-white/90 mt-1 break-words">{msg.message}</p>
+                                      )}
+                                    </div>
+                                    <div className="relative shrink-0">
+                                      {isAdmin && !msg.is_deleted && msgReportCounts[msg.id] ? (
+                                        <span className="text-[9px] text-white/30 whitespace-nowrap">({msgReportCounts[msg.id]} reports)</span>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                            <div className="flex gap-2 liquid-glass rounded-xl p-2">
+                              <input value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter") handleSendChat(); }} placeholder="Type a message as Admin..." className="flex-1 bg-white/10 text-white text-sm rounded-lg px-3 py-2 outline-none border border-white/10 focus:border-white/30 placeholder:text-white/30" />
+                              <button onClick={handleSendChat} disabled={!chatInput.trim()} className="bg-amber-500 text-black text-xs font-bold uppercase tracking-wider px-4 py-2 rounded-lg disabled:opacity-30 shrink-0">Send</button>
+                            </div>
+                          </div>
+
+                          {/* ─── Verification Requests ─── */}
+                          <div>
+                            <h3 className="text-sm font-bold uppercase tracking-wider text-white/60 mb-3 border-b border-white/5 pb-2">VERIFICATION REQUESTS</h3>
+                            {chatVerifications.filter(v => v.status === "pending").length === 0 ? (
+                              <p className="text-xs text-white/30 text-center py-4 uppercase tracking-wider">No pending requests</p>
+                            ) : (
+                              <div className="space-y-2">
+                                {chatVerifications.filter(v => v.status === "pending").map((v) => {
+                                  const user = Object.values(users).find(u => u.id === v.user_id);
+                                  return (
+                                    <div key={v.id} className="liquid-glass rounded-xl p-3 border border-white/5 flex items-center justify-between">
+                                      <div className="min-w-0 flex-1">
+                                        <p className="text-sm font-semibold text-white">{user?.name || v.user_id}</p>
+                                        <p className="text-[10px] text-white/40 uppercase tracking-wider mt-0.5">{v.register_number} • {v.department || 'N/A'}</p>
+                                      </div>
+                                      <div className="flex gap-2 shrink-0">
+                                        <button onClick={() => handleApproveVerification(v.user_id)} className="bg-green-500/20 text-green-400 text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-green-500/30 hover:bg-green-500/30">Approve</button>
+                                        <button onClick={() => handleRejectVerification(v.user_id)} className="bg-red-500/20 text-red-400 text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-red-500/30 hover:bg-red-500/30">Reject</button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* ─── Blocked Users ─── */}
+                          <div>
+                            <h3 className="text-sm font-bold uppercase tracking-wider text-white/60 mb-3 border-b border-white/5 pb-2">BLOCKED USERS</h3>
+                            {chatBlockedUsers.length === 0 ? (
+                              <p className="text-xs text-white/30 text-center py-4 uppercase tracking-wider">No blocked users</p>
+                            ) : (
+                              <div className="space-y-2">
+                                {chatBlockedUsers.map((b) => {
+                                  const user = Object.values(users).find(u => u.id === b.user_id);
+                                  return (
+                                    <div key={b.user_id} className="liquid-glass rounded-xl p-3 border border-red-500/10 flex items-center justify-between">
+                                      <div>
+                                        <p className="text-sm font-semibold text-white">{user?.name || b.user_id}</p>
+                                        <p className="text-[10px] text-red-400/60 uppercase tracking-wider mt-0.5">Blocked {formatTime(b.blocked_at)}</p>
+                                      </div>
+                                      <button onClick={() => handleUnblockChat(b.user_id)} className="bg-amber-500/20 text-amber-400 text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-amber-500/30 hover:bg-amber-500/30 shrink-0">Unblock</button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       )}
 
