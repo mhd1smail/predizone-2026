@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect, useRef, useMemo } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, ArrowUpRight, Play, Award, LogOut, CheckCircle, User, Zap, Mail, Target, Lock, Unlock, Eye, Trophy, Calendar, Volume2, VolumeX, MessageCircle, Shield } from "lucide-react";
+import { ArrowLeft, ArrowRight, ArrowUpRight, Play, Award, LogOut, CheckCircle, User, Zap, Mail, Target, Lock, Unlock, Eye, Trophy, Calendar, MessageCircle } from "lucide-react";
 import { useAuth } from "./context/AuthContext";
 import { signInWithGoogle, signOutUser } from "./lib/auth";
 import { createUserProfile, getUserProfile, onAllUsers, savePrediction, saveResult, deleteKnockoutMatch, saveKnockoutMatch, onAllPredictions, onAllResults, onKnockoutMatches, onArenaSettings, updateArenaSettings, onFixtureOverrides, saveFixtureOverride, onUndoStatus, setUndoPoint, undoLastFixtureEdit, updateUserProfile, onUserPredictions, sendPredictionBroadcast, sendChatMessage, onChatMessages, hasReportedMessage, reportMessage, onMessageReportCounts, submitVerification, onVerifications, approveVerification, rejectVerification, getUserVerification, getChatBlockedUsers, unblockChatUser, onChatBlockedUsers } from "./lib/db";
@@ -112,11 +112,6 @@ const FLAGS = {
   "Draw": "🤝"
 };
 const fl = t => FLAGS[t] || "🌍";
-const HERO_VIDEO_SRC = "https://res.cloudinary.com/dl0yhguyp/video/upload/q_auto/f_auto/v1780865223/hero-bg_nfckfc.mp4";
-
-const DASHBOARD_VIDEO_SRC = "https://res.cloudinary.com/dl0yhguyp/video/upload/q_auto/f_auto/v1780930655/bgm_yu1cch.mp4";
-const HERO_VIDEO_FALLBACK = "https://res.cloudinary.com/dl0yhguyp/video/upload/q_auto/f_auto/v1780865223/hero-bg_nfckfc.mp4";
-const BG_MUSIC_SRC = "/bgm.mp3";
 
 const CREATOR_LINKS = {
   linkedin: "https://www.linkedin.com/in/muhammedismaila/",
@@ -382,29 +377,6 @@ if (typeof window !== "undefined") {
   };
 }
 
-function FixedVideoBackground({ src, fallbackSrc, muted = true }) {
-  const [activeSrc, setActiveSrc] = useState(src);
-  const videoRef = useRef(null);
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    const tryPlay = () => { const p = video.play(); if (p && typeof p.catch === "function") { p.catch(() => { }); } };
-    tryPlay();
-    video.addEventListener("canplay", tryPlay);
-    return () => video.removeEventListener("canplay", tryPlay);
-  }, [activeSrc]);
-  useEffect(() => {
-    if (videoRef.current) videoRef.current.muted = muted;
-  }, [muted]);
-  return (
-    <div className="fixed-video-bg" aria-hidden="true">
-      <video ref={videoRef} src={activeSrc} className="fixed-video-bg__video" loop autoPlay playsInline preload="auto"
-        onError={() => { if (fallbackSrc && activeSrc !== fallbackSrc) setActiveSrc(fallbackSrc); }} />
-      <div className="fixed-video-bg__overlay video-bg-overlay--gradient" />
-    </div>
-  );
-}
-
 function BlurText({ text, className }) {
   const [isInView, setIsInView] = useState(false);
   const ref = useRef(null);
@@ -444,14 +416,11 @@ export default function App() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-  const audioRef = useRef(null);
-  const pullTouch = useRef({ startX: 0, startY: 0, pulling: false, swiping: false });
+  const pullTouch = useRef({ startY: 0, pulling: false });
   const [pullDistance, setPullDistance] = useState(0);
   const [swipeOffset, setSwipeOffset] = useState(0);
 
   const [participantSearch, setParticipantSearch] = useState("");
-  const slideDir = useRef(0);
   const scrollContainerRef = useRef(null);
   const swipeContainerRef = useRef(null);
   const tabBarRef = useRef(null);
@@ -527,20 +496,6 @@ export default function App() {
   useEffect(() => { currentTabRef.current = isAdmin ? adminTab : userTab; });
 
   useEffect(() => {
-    if (audioRef.current) audioRef.current.muted = isMuted;
-  }, [isMuted]);
-
-  useEffect(() => {
-    const el = audioRef.current;
-    if (!el) return;
-    const play = () => { el.play().catch(() => { }); };
-    play();
-    const handler = () => { play(); document.removeEventListener("click", handler); };
-    document.addEventListener("click", handler);
-    return () => document.removeEventListener("click", handler);
-  }, []);
-
-  useEffect(() => {
     [JERSEY_PLACEHOLDER, ...TEAMS.map((t) => t.jersey)].forEach((src) => { const i = new Image(); i.src = src; });
     const handleResize = () => setIsMobile(window.innerWidth < 640);
     handleResize();
@@ -590,18 +545,6 @@ export default function App() {
     const unsubUndo = onUndoStatus((info) => setUndoInfo(info));
     return () => unsubUndo();
   }, []);
-
-  useEffect(() => {
-    const handleVisibility = () => {
-      if (document.hidden && audioRef.current) {
-        audioRef.current.pause();
-      } else if (!document.hidden && audioRef.current && page === "home") {
-        audioRef.current.play().catch(() => { });
-      }
-    };
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, [page]);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -723,29 +666,16 @@ export default function App() {
     const el = scrollContainerRef.current;
     if (!el) return;
     const t = e.touches[0];
-    pullTouch.current.startX = t.clientX;
     pullTouch.current.startY = t.clientY;
     pullTouch.current.pulling = true;
-    pullTouch.current.swiping = false;
   };
 
   const handleTouchMove = (e) => {
     if (!pullTouch.current.pulling) return;
     const dy = e.touches[0].clientY - pullTouch.current.startY;
-    const dx = e.touches[0].clientX - pullTouch.current.startX;
-    if (!pullTouch.current.swiping && Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) {
-      pullTouch.current.swiping = true;
-      if (scrollContainerRef.current) scrollContainerRef.current.style.overflow = "hidden";
-    }
-    if (pullTouch.current.swiping) {
-      e.preventDefault();
-      setSwipeOffset(dx);
-      return;
-    }
     const el = scrollContainerRef.current;
     const atTop = el && el.scrollTop <= 0;
     if (dy > 0 && atTop) {
-      e.preventDefault();
       setPullDistance(Math.min(dy * 0.5, 100));
     } else {
       setPullDistance(0);
@@ -755,39 +685,47 @@ export default function App() {
   const handleTouchEnd = (e) => {
     if (!pullTouch.current.pulling) return;
     pullTouch.current.pulling = false;
-    if (scrollContainerRef.current) scrollContainerRef.current.style.overflow = "";
-    if (pullTouch.current.swiping && !isAdmin) {
-      pullTouch.current.swiping = false;
-      const dx = e.changedTouches[0].clientX - pullTouch.current.startX;
-      if (Math.abs(dx) > 50) {
-        const tabs = userTabs;
-        const cur = userTab;
-        const idx = tabs.indexOf(cur);
-        if (idx !== -1) {
-          slideDir.current = dx > 0 ? -1 : 1;
-          setSwipeOffset(dx > 0 ? 500 : -500);
-          const target = dx > 0 ? tabs[Math.max(0, idx - 1)] : tabs[Math.min(tabs.length - 1, idx + 1)];
-          setTimeout(() => {
-            setUserTab(target);
-            setSwipeOffset(0);
-          }, 200);
-        } else {
-          setSwipeOffset(0);
-        }
-      } else {
-        setSwipeOffset(0);
-      }
-      return;
-    }
-    if (pullTouch.current.swiping) {
-      pullTouch.current.swiping = false;
-      setSwipeOffset(0);
-      return;
-    }
     const el = scrollContainerRef.current;
     const atTop = el && el.scrollTop <= 0;
     if (pullDistance > 50 && atTop) handleRefresh();
     else setPullDistance(0);
+  };
+
+  const handleNavTouchStart = (e) => {
+    const t = e.touches[0];
+    pullTouch.current.startX = t.clientX;
+    pullTouch.current.navSwiping = true;
+  };
+
+  const handleNavTouchMove = (e) => {
+    if (!pullTouch.current.navSwiping) return;
+    const dx = e.touches[0].clientX - pullTouch.current.startX;
+    if (Math.abs(dx) > 5) {
+      setSwipeOffset(dx);
+    }
+  };
+
+  const handleNavTouchEnd = (e) => {
+    if (!pullTouch.current.navSwiping) return;
+    pullTouch.current.navSwiping = false;
+    const dx = e.changedTouches[0].clientX - pullTouch.current.startX;
+    if (!isAdmin && Math.abs(dx) > 50) {
+      const tabs = userTabs;
+      const cur = userTab;
+      const idx = tabs.indexOf(cur);
+      if (idx !== -1) {
+        setSwipeOffset(dx > 0 ? 500 : -500);
+        const target = dx > 0 ? tabs[Math.max(0, idx - 1)] : tabs[Math.min(tabs.length - 1, idx + 1)];
+        setTimeout(() => {
+          setUserTab(target);
+          setSwipeOffset(0);
+        }, 200);
+      } else {
+        setSwipeOffset(0);
+      }
+    } else {
+      setSwipeOffset(0);
+    }
   };
 
   const handleGoogleSignIn = async () => {
@@ -1030,7 +968,7 @@ export default function App() {
     if (!newHome.trim() || !newAway.trim()) { showToast("Enter both team names!", "error"); return; }
     if (!newDate || !newTime) { showToast("Enter match date and time!", "error"); return; }
 
-    const dateStr = `${newDate}T${newTime}:00`;
+    const dateStr = new Date(`${newDate}T${newTime}:00`).toISOString();
     const matchData = {
       id: editingMatch ? editingMatch.id : Date.now(),
       round: newRound,
@@ -1098,13 +1036,17 @@ export default function App() {
 
   return (
     <>
-      {page === "splash" && !currentUser && !needsProfile && (
-        <FixedVideoBackground src={HERO_VIDEO_SRC} fallbackSrc={HERO_VIDEO_FALLBACK} />
-      )}
-      {currentUser && !needsProfile && !isAdmin && (
-        <FixedVideoBackground src={DASHBOARD_VIDEO_SRC} fallbackSrc={HERO_VIDEO_FALLBACK} muted={isMuted} />
-      )}
-      <div className="relative w-full text-white font-body text-outline selection:bg-white/20">
+      <div className="min-h-screen w-full bg-[#0f0f0f] relative text-white font-body text-outline selection:bg-white/20">
+        <div
+          className="absolute inset-0 z-0"
+          style={{
+            backgroundImage: `
+              linear-gradient(to right, #262626 1px, transparent 1px),
+              linear-gradient(to bottom, #262626 1px, transparent 1px)
+            `,
+            backgroundSize: "20px 20px",
+          }}
+        />
 
         {toast && (
           <div className="toast-msg glass-panel p-4 rounded-[1.25rem] flex items-center gap-3 bg-black/90 border border-white/25 shadow-2xl max-w-sm pointer-events-auto">
@@ -1458,7 +1400,7 @@ export default function App() {
 
 
         {currentUser && !needsProfile && (
-          <div className="max-w-3xl mx-auto px-4 h-screen flex flex-col pt-4 relative z-10 no-scrollbar">
+          <div className="max-w-3xl mx-auto px-4 h-screen flex flex-col pt-4 relative z-10 overflow-hidden">
             <header className="liquid-glass rounded-[1.25rem] border border-white/10 mb-2 shrink-0">
               <div className="flex items-center justify-between p-4">
                 <div className="flex items-center gap-2 select-none">
@@ -1466,53 +1408,41 @@ export default function App() {
                   <span className="font-heading italic text-xl tracking-tight text-white uppercase font-bold">PREDIZONE</span>
                 </div>
                 <div className="flex items-center">
-                  {!isAdmin && (
-                    <button className="p-2 rounded-lg text-white/40 hover:text-white/80 transition-colors" onClick={() => setIsMuted(v => !v)} title={isMuted ? "Unmute" : "Mute"}>
-                      {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-                    </button>
-                  )}
-                  <button className="p-2 rounded-lg text-white/40 hover:text-white/80 transition-colors flex items-center gap-1" onClick={() => window.open("https://1.1.1.1", "_blank")} title="Open 1.1.1.1 Warp">
-                    <Shield className="h-4 w-4" />
-                  </button>
-                  <button className="p-2 rounded-lg text-white/40 hover:text-white/80 transition-colors flex items-center gap-1" onClick={() => window.open("https://1-1-1-1.en.uptodown.com/android", "_blank")} title="Download 1.1.1.1 for Android">
-                    <Shield className="h-3 w-3" /><span className="text-[8px] font-semibold">Android</span>
-                  </button>
                   <button className="p-2 rounded-lg text-red-400 hover:bg-white/5 transition-colors" onClick={handleLogout} title="Logout">
                     <LogOut className="h-4 w-4" />
                   </button>
                 </div>
               </div>
-              <div ref={tabBarRef} className="flex gap-1 px-3 pb-3 overflow-x-auto no-scrollbar">
-                {!isAdmin ? (
-                  <>
-                    <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "fixtures" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => setUserTab("fixtures")}>
-                      <Target className="h-3 w-3 inline mr-1" />Predict
-                    </button>
-                    <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "connect" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => { setUserTab("connect"); setHasUnreadChat(false); }}>
-                      <span className={hasUnreadChat && userTab !== "connect" ? "blink-pulse" : ""}><MessageCircle className="h-3 w-3 inline mr-1" />Connect</span>
-                    </button>
-                    <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "upcoming" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => setUserTab("upcoming")}>
-                      <Calendar className="h-3 w-3 inline mr-1" />All
-                    </button>
-                    <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "finished" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => setUserTab("finished")}>
-                      <CheckCircle className="h-3 w-3 inline mr-1" />Finished
-                    </button>
-                    <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "leaderboard" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => setUserTab("leaderboard")}>
-                      <Trophy className="h-3 w-3 inline mr-1" />Standings
-                    </button>
-                    <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "you" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => setUserTab("you")}>
-                      <User className="h-3 w-3 inline mr-1" />You
-                    </button>
-                  </>
-                ) : (
-                  <span className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white/60">Admin Console</span>
-                )}
-              </div>
-              <p className="text-[9px] text-white/20 text-center mt-2 sm:hidden select-none">swipe →</p>
             </header>
-            <audio ref={audioRef} src={BG_MUSIC_SRC} loop autoPlay />
-            <div ref={scrollContainerRef} className="flex-1 overflow-y-auto no-scrollbar flex flex-col" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 50px)" }} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
-              <div ref={swipeContainerRef} className="flex flex-col min-h-0" style={{ transform: `translateX(${swipeOffset}px)`, opacity: Math.max(0, 1 - Math.abs(swipeOffset) / 400), transition: pullTouch.current.swiping ? "none" : "transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1)" }}>
+            <div ref={tabBarRef} className="liquid-glass rounded-[1.25rem] border border-white/10 px-3 py-3 mb-2 overflow-x-auto no-scrollbar shrink-0 flex gap-1" style={{ touchAction: "pan-y" }} onTouchStart={handleNavTouchStart} onTouchMove={handleNavTouchMove} onTouchEnd={handleNavTouchEnd}>
+              {!isAdmin ? (
+                <>
+                  <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "fixtures" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => setUserTab("fixtures")}>
+                    <Target className="h-3 w-3 inline mr-1" />Predict
+                  </button>
+                  <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "connect" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => { setUserTab("connect"); setHasUnreadChat(false); }}>
+                    <span className={hasUnreadChat && userTab !== "connect" ? "blink-pulse" : ""}><MessageCircle className="h-3 w-3 inline mr-1" />Connect</span>
+                  </button>
+                  <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "upcoming" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => setUserTab("upcoming")}>
+                    <Calendar className="h-3 w-3 inline mr-1" />All
+                  </button>
+                  <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "finished" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => setUserTab("finished")}>
+                    <CheckCircle className="h-3 w-3 inline mr-1" />Finished
+                  </button>
+                  <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "leaderboard" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => setUserTab("leaderboard")}>
+                    <Trophy className="h-3 w-3 inline mr-1" />Standings
+                  </button>
+                  <button className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-lg whitespace-nowrap transition-colors ${userTab === "you" ? "bg-white text-black" : "text-white/70 hover:text-white border border-white/10"}`} onClick={() => setUserTab("you")}>
+                    <User className="h-3 w-3 inline mr-1" />You
+                  </button>
+                </>
+              ) : (
+                <span className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white/60">Admin Console</span>
+              )}
+            </div>
+            <p className="text-[9px] text-white/20 text-center mb-2 sm:hidden select-none shrink-0">swipe →</p>
+            <div ref={scrollContainerRef} className="flex-1 overflow-y-auto no-scrollbar flex flex-col" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 50px)", touchAction: "pan-y pinch-zoom" }} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
+              <div ref={swipeContainerRef} className="flex flex-col min-h-0" style={{ transform: `translateX(${swipeOffset}px)`, opacity: Math.max(0, 1 - Math.abs(swipeOffset) / 400), transition: pullTouch.current.navSwiping ? "none" : "transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1)" }}>
                 <motion.div key={isAdmin ? adminTab : userTab} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.15 }} className="flex flex-col min-h-0">
 
                   {pullDistance > 0 && (

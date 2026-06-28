@@ -281,7 +281,7 @@ export async function deleteKnockoutMatch(matchId) {
 
 export function onKnockoutMatches(callback) {
   supabase.from("knockout_matches").select("*").limit(1000000).then(({ data }) => {
-    callback(data || []);
+    callback((data || []).map(mapKnockoutMatch));
   });
   const channel = supabase
     .channel("knockout-matches")
@@ -289,7 +289,7 @@ export function onKnockoutMatches(callback) {
       { event: "*", schema: "public", table: "knockout_matches" },
       () => {
         supabase.from("knockout_matches").select("*").limit(1000000).then(({ data }) => {
-          callback(data || []);
+          callback((data || []).map(mapKnockoutMatch));
         });
       }
     )
@@ -541,6 +541,18 @@ function mapResult(data) {
     homeGoals: data.home_goals,
     awayGoals: data.away_goals,
     enteredAt: data.entered_at,
+  };
+}
+
+function mapKnockoutMatch(data) {
+  return {
+    id: data.id,
+    round: data.round,
+    home: data.home,
+    away: data.away,
+    date: data.date,
+    venue: data.venue,
+    isKnockout: true,
   };
 }
 

@@ -3,7 +3,6 @@
 @tailwind utilities;
 
 :root {
-  --bg-dark: #000000;
   --font-serif: 'Instrument Serif', serif;
   --font-sans: 'Barlow', sans-serif;
   --font-anton: 'Anton', sans-serif;
@@ -12,7 +11,25 @@
 }
 
 body {
-  background: #000;
+  margin: 0;
+  background: #0f0f0f;
+  color: #ffffff;
+  font-family: var(--font-sans);
+  overflow: hidden;
+  height: 100vh;
+  height: 100dvh;
+  width: 100vw;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  opacity: 0.05;
+  pointer-events: none;
+  z-index: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='46' fill='none' stroke='%23564946' stroke-width='3'/%3E%3Cpath d='M50 4 L50 96' stroke='%23564946' stroke-width='1.5' opacity='0.4'/%3E%3Cpath d='M4 50 L96 50' stroke='%23564946' stroke-width='1.5' opacity='0.4'/%3E%3Cpath d='M18 18 L82 82' stroke='%23564946' stroke-width='1' opacity='0.25'/%3E%3Cpath d='M82 18 L18 82' stroke='%23564946' stroke-width='1' opacity='0.25'/%3E%3Cpolygon points='50,10 25,42 75,42' fill='none' stroke='%23564946' stroke-width='1.5' opacity='0.3'/%3E%3Cpolygon points='50,90 25,58 75,58' fill='none' stroke='%23564946' stroke-width='1.5' opacity='0.3'/%3E%3C/svg%3E");
+  background-size: 80px 80px;
 }
 
 @keyframes blink-pulse {
@@ -22,16 +39,6 @@ body {
 
 .blink-pulse {
   animation: blink-pulse 1.2s ease-in-out infinite;
-}
-
-body {
-  background-color: var(--bg-dark);
-  color: #ffffff;
-  font-family: var(--font-sans);
-  overflow: hidden;
-  height: 100vh;
-  height: 100dvh;
-  width: 100vw;
 }
 
 /* Custom Scroll Snapping */
@@ -248,37 +255,6 @@ body {
 /* Team jersey carousel — swipeable on touch devices */
 .jersey-carousel--swipeable {
   touch-action: pan-y pinch-zoom;
-}
-
-/* Fixed splash video — stays behind all scrollable slides */
-.fixed-video-bg {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  overflow: hidden;
-  pointer-events: none;
-  background:
-    radial-gradient(ellipse 100% 70% at 50% 0%, #1a1a2e 0%, #0d0d1a 40%, #000000 100%),
-    linear-gradient(180deg, #16213e 0%, #0f3460 30%, #1a1a2e 60%, #000000 100%);
-}
-
-.fixed-video-bg__video {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.fixed-video-bg__overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-}
-
-.video-bg-overlay--gradient {
-  mix-blend-mode: multiply;
-  background:
-    linear-gradient(180deg, rgba(0, 0, 0, 0.60) 0%, transparent 40%, rgba(0, 0, 0, 0.70) 100%),
-    radial-gradient(ellipse at center, transparent 0%, rgba(0, 0, 0, 0.40) 100%);
 }
 
 /* Safe-area bottom padding for dashboard */
